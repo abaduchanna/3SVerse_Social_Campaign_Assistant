@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>3SVerse Meta Planner Scheduler</title>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <header>
+    <img src="brand/3SVerse_Logo_Vector_1200x300.png" alt="3SVerse">
+    <div><h1>Meta Planner Scheduler</h1><p>Facebook + Instagram · Posts · Reels · Stories</p></div>
+  </header>
+  <main>
+    <section class="card">
+      <h2>1. Link campaign folders</h2>
+      <label>Campaign folder 1
+        <input id="captionFolder" type="file" webkitdirectory multiple>
+      </label>
+      <p id="captionSummary" class="hint">Choose the folder containing text, images, videos—or all of them.</p>
+      <label>Campaign folder 2 <span class="hint">(optional)</span>
+        <input id="reelFolder" type="file" webkitdirectory multiple>
+      </label>
+      <p id="reelSummary" class="hint">Use only when the campaign is split across two folders.</p>
+    </section>
+
+    <section class="card grid">
+      <div>
+        <h2>2. Schedule</h2>
+        <label>Start date <input id="startDate" type="date"></label>
+        <label>Daily time <input id="time" type="time" value="09:00"></label>
+        <p class="hint">Times use the computer's Central Time setting.</p>
+      </div>
+      <div>
+        <h2>3. Content types</h2>
+        <label class="check"><input id="reelType" type="checkbox" checked> Facebook + Instagram Reels</label>
+        <label class="check"><input id="postType" type="checkbox"> Facebook + Instagram image posts</label>
+        <label class="check"><input id="storyType" type="checkbox"> Facebook + Instagram Stories</label>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="row"><h2>Campaign queue</h2><strong id="queueCount">0 items</strong></div>
+      <div id="queue" class="queue"><p class="hint">Select one or two folders to build the queue.</p></div>
+    </section>
+
+    <section class="card actions">
+      <button id="openPlanner" class="secondary">Open Meta Planner</button>
+      <button id="start">Schedule complete queue</button>
+      <button id="stop" class="danger" disabled>Stop after current item</button>
+      <p id="status" role="status">Ready.</p>
+    </section>
+  </main>
+  <footer>3SVerse · Local-first · Nothing is uploaded until you start scheduling</footer>
+  <script src="lib.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

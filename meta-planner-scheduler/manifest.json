@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "3SVerse Meta Planner Scheduler",
+  "version": "1.0.0",
+  "description": "Build and schedule Facebook and Instagram campaigns from two local folders in Meta Business Suite.",
+  "permissions": ["storage", "tabs", "scripting", "debugger", "unlimitedStorage"],
+  "host_permissions": ["https://business.facebook.com/*"],
+  "background": { "service_worker": "background.js" },
+  "action": {
+    "default_title": "Open 3SVerse Meta Planner Scheduler",
+    "default_icon": {
+      "16": "brand/icon-16.png",
+      "48": "brand/icon-48.png",
+      "128": "brand/icon-128.png"
+    }
+  },
+  "icons": {
+    "16": "brand/icon-16.png",
+    "48": "brand/icon-48.png",
+    "128": "brand/icon-128.png"
+  },
+  "content_scripts": [{
+    "matches": ["https://business.facebook.com/*"],
+    "js": ["content.js"],
+    "run_at": "document_idle"
+  }]
+}
