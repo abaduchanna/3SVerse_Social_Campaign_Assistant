@@ -106,13 +106,14 @@ async function loadJoinedGroups(tabId) {
 }
 
 function resolveRequestedGroups(requested, joined) {
-  const resolved = [];
+  const resolved = new Map();
+  const add = group => resolved.set(groupIdentity(group.url), group);
   for (const value of requested) {
     const requestedIdentity = groupIdentity(value);
     if (requestedIdentity) {
       const match = joined.find(group => groupIdentity(group.url) === requestedIdentity);
       if (!match) throw new Error(`Not joined: ${value}`);
-      resolved.push(match);
+      add(match);
       continue;
     }
 
@@ -124,13 +125,9 @@ function resolveRequestedGroups(requested, joined) {
     if (!matches.length) {
       throw new Error(`Exact joined group not found: ${value}`);
     }
-    if (matches.length > 1) {
-      const choices = matches.map(group => group.url).join(" | ");
-      throw new Error(`Multiple joined groups have the exact name “${value}”. Paste the intended group URL: ${choices}`);
-    }
-    resolved.push(matches[0]);
+    matches.forEach(add);
   }
-  return resolved;
+  return [...resolved.values()];
 }
 
 async function saveState(state) {
@@ -270,7 +267,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         index: 0,
         posted: 0,
         total: targets.length,
-        status: `Verified ${targets.length} exact joined groups. Preparing 1 of ${targets.length}.`,
+        status: `Resolved ${message.groups.length} entries to ${targets.length} exact joined groups. Preparing 1 of ${targets.length}.`,
         error: null
       };
       await chrome.storage.local.set({ autoCampaign: state });

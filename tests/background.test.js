@@ -127,11 +127,20 @@ function send(message) {
     { name: "Total Wireless", url: "https://www.facebook.com/groups/333/" },
     { name: "Total Wireless", url: "https://www.facebook.com/groups/444/" }
   ];
-  await assert.rejects(
-    send({ type: "START_CAMPAIGN", groups: ["Total Wireless"], caption: "Test" }),
-    /Multiple joined groups have the exact name/
-  );
-  assert.equal(sent.filter(type => type === "PREPARE_POST").length, prepareCount);
+  const expanded = await send({ type: "START_CAMPAIGN", groups: ["Total Wireless"], caption: "Test" });
+  assert.equal(expanded.state.total, 2);
+  assert.equal(expanded.state.posted, 1);
+  assert.equal(expanded.state.active, true);
+  alarmListener({ name: scheduledAlarm.name });
+  for (let attempt = 0; attempt < 100 && data.autoCampaign?.active; attempt += 1) {
+    await new Promise(resolve => setTimeout(resolve, 5));
+  }
+  assert.equal(data.autoCampaign.posted, 2);
+  assert.equal(data.autoCampaign.active, false);
+  assert.deepEqual(preparedGroups.slice(-2), [
+    "https://www.facebook.com/groups/333/",
+    "https://www.facebook.com/groups/444/"
+  ]);
   process.stdout.write("background campaign test passed\n");
 })().catch(error => {
   console.error(error);

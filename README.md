@@ -51,6 +51,8 @@ Version 1.0.7 replaces synthetic DOM caption typing with Chrome DevTools Protoco
 
 Version 1.0.8 removes general Facebook search and every partial-name fallback from campaign routing. At Start, the assistant opens Facebook **Your groups**, scans and scrolls `All groups you've joined`, resolves every requested entry to an exact joined-group URL, and only then starts posting. A missing name stops the campaign. If multiple joined groups have the same exact name, it stops and lists their URLs so the owner can select the intended destination without guessing.
 
+Version 1.0.9 removes the duplicate-name URL burden. If several joined groups have the same exact title, one campaign entry automatically expands to every exact match; resolved URLs are deduplicated so no destination is posted twice. Partial matches remain forbidden and missing exact names still stop before posting.
+
 Meta Business Suite remains the recommended scheduler for Facebook Page and Instagram posts. YouTube Studio remains the recommended scheduler for YouTube. Facebook does not provide a dependable public API for automatically posting to every group a personal account has joined.
 
 ## Privacy
