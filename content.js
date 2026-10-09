@@ -48,8 +48,7 @@
         const imageName = imageAlt.replace(/^profile photo of\s+/i, "");
         return normalize(imageName || anchor.getAttribute("aria-label") || anchor.innerText);
       };
-      return candidates.find(anchor => nameFor(anchor) === wanted)
-        || candidates.find(anchor => nameFor(anchor).includes(wanted));
+      return candidates.find(anchor => nameFor(anchor) === wanted);
     });
     location.href = link.href;
     return { navigating: true };
@@ -62,6 +61,57 @@
     } catch (_) {
       return null;
     }
+  }
+
+  function groupIdentity(value) {
+    try {
+      const match = new URL(value, location.origin).pathname.match(/^\/groups\/([^/]+)/i);
+      return match ? match[1].toLowerCase() : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function joinedGroupsOnPage() {
+    const groups = new Map();
+    for (const anchor of document.querySelectorAll('a[href*="/groups/"]')) {
+      const identity = groupIdentity(anchor.href);
+      const name = (anchor.innerText || anchor.getAttribute("aria-label") || "").trim();
+      if (!identity || ["feed", "discover", "joins"].includes(identity)) continue;
+      if (!name || normalize(name) === "view group" || /last active/i.test(name)) continue;
+      if (!groups.has(identity)) groups.set(identity, { name, url: `https://www.facebook.com/groups/${identity}/` });
+    }
+    return [...groups.values()];
+  }
+
+  async function scanJoinedGroups() {
+    if (!location.pathname.startsWith("/groups/joins")) {
+      throw new Error("Facebook Your groups page is not open.");
+    }
+    const expectedText = [...document.querySelectorAll("h1,h2,h3,[role=heading]")]
+      .map(element => element.innerText || "")
+      .find(text => /all groups you.ve joined\s*\(\d+\)/i.test(text));
+    const expected = Number(expectedText?.match(/\((\d+)\)/)?.[1] || 0);
+    let best = joinedGroupsOnPage();
+    let stable = 0;
+    for (let pass = 0; pass < 100 && (!expected || best.length < expected) && stable < 4; pass += 1) {
+      const scrollables = [...document.querySelectorAll("div")].filter(element =>
+        element.scrollHeight > element.clientHeight + 100 && visible(element)
+      );
+      const target = scrollables.sort((a, b) => b.scrollHeight - a.scrollHeight)[0]
+        || document.scrollingElement;
+      if (target === document.scrollingElement) window.scrollTo(0, document.body.scrollHeight);
+      else {
+        target.scrollTop = target.scrollHeight;
+        target.dispatchEvent(new Event("scroll", { bubbles: true }));
+      }
+      await sleep(900);
+      const next = joinedGroupsOnPage();
+      stable = next.length > best.length ? 0 : stable + 1;
+      if (next.length > best.length) best = next;
+    }
+    if (!best.length) throw new Error("No joined Facebook groups were found on Your groups.");
+    return { ok: true, groups: best, expected };
   }
 
   async function focusComposer() {
@@ -153,6 +203,12 @@
       sendResponse({ ok: true });
       return;
     }
+    if (message.type === "SCAN_JOINED_GROUPS") {
+      scanJoinedGroups()
+        .then(sendResponse)
+        .catch(error => sendResponse({ ok: false, error: error.message }));
+      return true;
+    }
     if (message.type === "PUBLISH_POST") {
       publishPreparedPost()
         .then(sendResponse)
@@ -172,7 +228,7 @@
       if (!group) throw new Error("Group name is empty.");
 
       const directUrl = groupUrl(group);
-      if (directUrl && !location.href.startsWith(directUrl.replace(/\/$/, ""))) {
+      if (directUrl && groupIdentity(location.href) !== groupIdentity(directUrl)) {
         sendResponse({ ok: true, navigating: true, message: "Opening the saved group URL…" });
         location.href = directUrl;
         return;
@@ -185,6 +241,11 @@
       }
 
       if (!location.pathname.includes("/groups/")) {
+        if (directUrl) {
+          sendResponse({ ok: true, navigating: true, message: `Opening ${group}…` });
+          location.href = directUrl;
+          return;
+        }
         sendResponse({ ok: true, navigating: true, message: `Searching for ${group}…` });
         location.href = `https://www.facebook.com/search/groups/?q=${encodeURIComponent(group)}`;
         return;

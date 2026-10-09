@@ -3,19 +3,36 @@ const assert = require("node:assert/strict");
 const data = { autoCampaignMedia: { name: "reel.mp4", bytes: [1, 2, 3] } };
 const sent = [];
 const debuggerCommands = [];
+const preparedGroups = [];
+let currentTab = { id: 7, status: "complete", url: "https://www.facebook.com/" };
+let joinedGroups = [
+  { name: "Group One", url: "https://www.facebook.com/groups/111/" },
+  { name: "Group Two", url: "https://www.facebook.com/groups/222/" }
+];
 let messageListener;
 let alarmListener;
 let scheduledAlarm;
 
 global.chrome = {
   tabs: {
-    query: async () => [{ id: 7, status: "complete", url: "https://www.facebook.com/" }],
-    create: async () => ({ id: 7, status: "complete", url: "https://www.facebook.com/" }),
-    get: async () => ({ id: 7, status: "complete", url: "https://www.facebook.com/groups/test" }),
+    query: async () => [currentTab],
+    create: async () => currentTab,
+    get: async () => currentTab,
+    update: async (_tabId, changes) => {
+      currentTab = { ...currentTab, ...changes, status: "complete" };
+      return currentTab;
+    },
     sendMessage: async (_tabId, message) => {
       sent.push(message.type);
       if (message.type === "PING") return { ok: true };
-      if (message.type === "PREPARE_POST") return { ok: true, editorReady: true };
+      if (message.type === "SCAN_JOINED_GROUPS") return {
+        ok: true,
+        groups: joinedGroups
+      };
+      if (message.type === "PREPARE_POST") {
+        preparedGroups.push(message.group);
+        return { ok: true, editorReady: true };
+      }
       if (message.type === "VERIFY_COMPOSER") return { ok: true, prepared: true };
       if (message.type === "PUBLISH_POST") return { ok: true, posted: true };
       throw new Error(`Unexpected message: ${message.type}`);
@@ -83,11 +100,38 @@ function send(message) {
   assert.equal(data.autoCampaign.status, "Campaign complete: 2 of 2 posted.");
   assert.equal(data.autoCampaignMedia.name, "reel.mp4");
   assert.equal(sent.filter(type => type === "PREPARE_POST").length, 2);
+  assert.deepEqual(preparedGroups, [
+    "https://www.facebook.com/groups/111/",
+    "https://www.facebook.com/groups/222/"
+  ]);
   assert.equal(sent.filter(type => type === "VERIFY_COMPOSER").length, 2);
   assert.equal(sent.filter(type => type === "PUBLISH_POST").length, 2);
   assert.equal(debuggerCommands.filter(command => command.method === "Input.insertText").length, 2);
   assert.equal(debuggerCommands.find(command => command.method === "Input.insertText").params.text,
     "Line one\n\nhttps://3sverse.com\n#VidaPay");
+
+  const prepareCount = sent.filter(type => type === "PREPARE_POST").length;
+  currentTab = { id: 7, status: "complete", url: "https://www.facebook.com/" };
+  joinedGroups = [{
+    name: "Total Wireless Customer and Complaints",
+    url: "https://www.facebook.com/groups/wrong/"
+  }];
+  await assert.rejects(
+    send({ type: "START_CAMPAIGN", groups: ["Total Wireless"], caption: "Test" }),
+    /Exact joined group not found: Total Wireless/
+  );
+  assert.equal(sent.filter(type => type === "PREPARE_POST").length, prepareCount);
+
+  currentTab = { id: 7, status: "complete", url: "https://www.facebook.com/" };
+  joinedGroups = [
+    { name: "Total Wireless", url: "https://www.facebook.com/groups/333/" },
+    { name: "Total Wireless", url: "https://www.facebook.com/groups/444/" }
+  ];
+  await assert.rejects(
+    send({ type: "START_CAMPAIGN", groups: ["Total Wireless"], caption: "Test" }),
+    /Multiple joined groups have the exact name/
+  );
+  assert.equal(sent.filter(type => type === "PREPARE_POST").length, prepareCount);
   process.stdout.write("background campaign test passed\n");
 })().catch(error => {
   console.error(error);

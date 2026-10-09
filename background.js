@@ -1,12 +1,28 @@
 const FACEBOOK_HOME = "https://www.facebook.com/";
+const JOINED_GROUPS_URL = "https://www.facebook.com/groups/joins/?nav_source=tab&ordering=viewer_added";
 const CAMPAIGN_ALARM = "3sverse-campaign-next";
 const POST_INTERVAL_MINUTES = 0.5;
 let campaignBusy = false;
 
 async function getFacebookTab() {
   const tabs = await chrome.tabs.query({ url: ["https://www.facebook.com/*", "https://m.facebook.com/*"] });
-  if (tabs.length) return tabs[0];
+  if (tabs.length) {
+    return tabs.find(tab => /facebook\.com\/groups\/(joins|feed)/i.test(tab.url || "")) || tabs[0];
+  }
   return chrome.tabs.create({ url: FACEBOOK_HOME, active: false });
+}
+
+function normalizedName(value) {
+  return (value || "").normalize("NFKC").replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function groupIdentity(value) {
+  try {
+    const match = new URL(value).pathname.match(/^\/groups\/([^/]+)/i);
+    return match ? match[1].toLowerCase() : null;
+  } catch (_) {
+    return null;
+  }
 }
 
 async function ensureContentScript(tabId) {
@@ -75,6 +91,48 @@ async function prepareThroughNavigation(tab, message) {
   throw new Error("Facebook could not reach the selected group. Check its exact name or use its URL.");
 }
 
+async function loadJoinedGroups(tabId) {
+  let tab = await chrome.tabs.get(tabId);
+  if (!tab.url?.startsWith("https://www.facebook.com/groups/joins/")) {
+    const previousUrl = tab.url;
+    await chrome.tabs.update(tabId, { url: JOINED_GROUPS_URL, active: false });
+    await waitForNavigation(tabId, previousUrl);
+    tab = await waitForTabReady(tabId);
+  }
+  await ensureContentScript(tabId);
+  const response = await chrome.tabs.sendMessage(tabId, { type: "SCAN_JOINED_GROUPS" });
+  if (!response?.ok) throw new Error(response?.error || "Facebook Your groups could not be read.");
+  return response.groups || [];
+}
+
+function resolveRequestedGroups(requested, joined) {
+  const resolved = [];
+  for (const value of requested) {
+    const requestedIdentity = groupIdentity(value);
+    if (requestedIdentity) {
+      const match = joined.find(group => groupIdentity(group.url) === requestedIdentity);
+      if (!match) throw new Error(`Not joined: ${value}`);
+      resolved.push(match);
+      continue;
+    }
+
+    const trimmed = value.trim();
+    const caseExact = joined.filter(group => group.name.trim() === trimmed);
+    const matches = caseExact.length ? caseExact : joined.filter(group =>
+      normalizedName(group.name) === normalizedName(trimmed)
+    );
+    if (!matches.length) {
+      throw new Error(`Exact joined group not found: ${value}`);
+    }
+    if (matches.length > 1) {
+      const choices = matches.map(group => group.url).join(" | ");
+      throw new Error(`Multiple joined groups have the exact name “${value}”. Paste the intended group URL: ${choices}`);
+    }
+    resolved.push(matches[0]);
+  }
+  return resolved;
+}
+
 async function saveState(state) {
   await chrome.storage.local.set({ autoCampaign: state });
   return state;
@@ -120,15 +178,17 @@ async function resumeCampaign() {
     const state = stored.autoCampaign;
     const media = stored.autoCampaignMedia || null;
     if (!state?.active) return;
-    if (state.index >= state.groups.length) {
+    if (!state.targets?.length) throw new Error("Exact joined-group targets are missing. Start the campaign again.");
+    if (state.index >= state.targets.length) {
       state.active = false;
       state.status = `Campaign complete: ${state.posted} of ${state.total} posted.`;
       await saveState(state);
       return;
     }
 
-    const group = state.groups[state.index];
-    state.status = `Preparing ${state.index + 1} of ${state.total}: ${group}`;
+    const target = state.targets[state.index];
+    const group = target.url;
+    state.status = `Preparing ${state.index + 1} of ${state.total}: ${target.name}`;
     state.error = null;
     await saveState(state);
     const tab = await chrome.tabs.get(state.tabId);
@@ -148,7 +208,7 @@ async function resumeCampaign() {
     const beforePublish = (await chrome.storage.local.get("autoCampaign")).autoCampaign;
     if (!beforePublish?.active) return;
 
-    state.status = `Posting ${state.index + 1} of ${state.total}: ${group}`;
+    state.status = `Posting ${state.index + 1} of ${state.total}: ${target.name}`;
     await saveState(state);
     await ensureContentScript(state.tabId);
     const posted = await chrome.tabs.sendMessage(state.tabId, { type: "PUBLISH_POST", group });
@@ -163,7 +223,7 @@ async function resumeCampaign() {
       await saveState(state);
       return;
     }
-    if (state.index >= state.groups.length) {
+    if (state.index >= state.targets.length) {
       state.active = false;
       state.status = `Campaign complete: ${state.posted} of ${state.total} posted.`;
       await saveState(state);
@@ -195,15 +255,22 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     (async () => {
       await chrome.alarms.clear(CAMPAIGN_ALARM);
       const tab = await getFacebookTab();
+      const resolvingState = {
+        active: false, tabId: tab.id, index: 0, posted: 0,
+        total: message.groups.length, status: "Reading and scrolling Facebook Your groups…", error: null
+      };
+      await saveState(resolvingState);
+      const joined = await loadJoinedGroups(tab.id);
+      const targets = resolveRequestedGroups(message.groups, joined);
       const state = {
         active: true,
         tabId: tab.id,
-        groups: message.groups,
+        targets,
         caption: message.caption,
         index: 0,
         posted: 0,
-        total: message.groups.length,
-        status: `Campaign started. Preparing 1 of ${message.groups.length}.`,
+        total: targets.length,
+        status: `Verified ${targets.length} exact joined groups. Preparing 1 of ${targets.length}.`,
         error: null
       };
       await chrome.storage.local.set({ autoCampaign: state });
