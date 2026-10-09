@@ -81,7 +81,6 @@ function send(message) {
 (async () => {
   const started = await send({
     type: "START_CAMPAIGN",
-    groups: ["Group One", "Group Two"],
     caption: "Line one\n\nhttps://3sverse.com\n#VidaPay"
   });
   assert.equal(started.state.posted, 1);
@@ -112,22 +111,20 @@ function send(message) {
 
   const prepareCount = sent.filter(type => type === "PREPARE_POST").length;
   currentTab = { id: 7, status: "complete", url: "https://www.facebook.com/" };
-  joinedGroups = [{
-    name: "Total Wireless Customer and Complaints",
-    url: "https://www.facebook.com/groups/wrong/"
-  }];
+  joinedGroups = [];
   await assert.rejects(
-    send({ type: "START_CAMPAIGN", groups: ["Total Wireless"], caption: "Test" }),
-    /Exact joined group not found: Total Wireless/
+    send({ type: "START_CAMPAIGN", caption: "Test" }),
+    /No joined Facebook groups were found/
   );
   assert.equal(sent.filter(type => type === "PREPARE_POST").length, prepareCount);
 
   currentTab = { id: 7, status: "complete", url: "https://www.facebook.com/" };
   joinedGroups = [
     { name: "Total Wireless", url: "https://www.facebook.com/groups/333/" },
-    { name: "Total Wireless", url: "https://www.facebook.com/groups/444/" }
+    { name: "Total Wireless", url: "https://www.facebook.com/groups/444/" },
+    { name: "Duplicate card", url: "https://www.facebook.com/groups/333/" }
   ];
-  const expanded = await send({ type: "START_CAMPAIGN", groups: ["Total Wireless"], caption: "Test" });
+  const expanded = await send({ type: "START_CAMPAIGN", caption: "Test" });
   assert.equal(expanded.state.total, 2);
   assert.equal(expanded.state.posted, 1);
   assert.equal(expanded.state.active, true);

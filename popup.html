@@ -12,9 +12,10 @@
     <p>Social Campaign Assistant</p>
   </header>
   <main>
-    <label for="groups">Facebook groups</label>
-    <textarea id="groups" rows="4" placeholder="Group One, Group Two, Group Three"></textarea>
-    <small>Only your joined groups are used. Enter exact names or URLs. One name automatically includes every joined group with that exact name.</small>
+    <section class="joinedGroupsNotice">
+      <strong>Facebook groups</strong>
+      <small>No group names or URLs needed. At Start, the assistant opens Facebook Your groups, scrolls the complete joined-groups list, and posts to each joined group once.</small>
+    </section>
 
     <label for="caption">Post text</label>
     <textarea id="caption" rows="7" placeholder="Paste the campaign caption here"></textarea>
@@ -45,7 +46,7 @@
       </div>
     </section>
   </main>
-  <footer>v1.0.9 · Exact names auto-expand · 3sverse.com</footer>
+  <footer>v1.1.0 · Your groups auto-import · 3sverse.com</footer>
   <script src="popup.js"></script>
 </body>
 </html>

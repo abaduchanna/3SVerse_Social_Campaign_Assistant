@@ -1,18 +1,14 @@
 const $ = selector => document.querySelector(selector);
-let campaign = { groups: [], caption: "", facebookTabId: null };
+let campaign = { caption: "", facebookTabId: null };
 let runState = { active: false, index: 0, posted: 0, total: 0, status: "Ready." };
 let storedMedia = null;
 
-function parseGroups(text) {
-  return [...new Set(text.split(/[,\n]+/).map(value => value.trim()).filter(Boolean))];
-}
-
 function paint() {
-  const total = runState.total || campaign.groups.length;
+  const total = runState.total || 0;
   const posted = runState.posted || 0;
   const currentIndex = runState.active ? runState.index : Math.min(posted, total);
   $("#counter").textContent = `${posted} of ${total} posted`;
-  $("#groupName").textContent = campaign.groups[currentIndex]
+  $("#groupName").textContent = runState.targets?.[currentIndex]?.name
     || (total && posted >= total ? "Campaign complete" : "No group selected");
   $("#prepare").disabled = runState.active;
   $("#stop").disabled = !runState.active;
@@ -35,11 +31,10 @@ function paintStoredMedia() {
 }
 
 async function saveCampaign() {
-  campaign.groups = parseGroups($("#groups").value);
   campaign.caption = $("#caption").value.trim();
   await chrome.storage.local.set({ campaign });
   paint();
-  setStatus(`Saved ${campaign.groups.length} groups.`);
+  setStatus("Post text saved. Joined groups will be imported automatically at Start.");
 }
 
 async function mediaPayload() {
@@ -51,7 +46,6 @@ async function mediaPayload() {
 
 async function startCampaign() {
   await saveCampaign();
-  if (!campaign.groups.length) throw new Error("Add at least one exact Facebook group name.");
   if (!campaign.caption) throw new Error("Add the post text.");
 
   $("#prepare").disabled = true;
@@ -59,10 +53,9 @@ async function startCampaign() {
   const media = await mediaPayload();
   const hasMedia = Boolean(media?.bytes?.length);
   await chrome.storage.local.set({ autoCampaignMedia: media });
-  setStatus(`Starting ${campaign.groups.length} posts${hasMedia ? " with the selected reel/image" : " without media"}…`);
+  setStatus(`Opening Facebook Your groups and collecting every joined group${hasMedia ? " with the selected reel/image stored" : " for a text-only campaign"}…`);
   const response = await chrome.runtime.sendMessage({
     type: "START_CAMPAIGN",
-    groups: campaign.groups,
     caption: campaign.caption
   });
   if (!response?.ok) throw new Error(response?.error || "Campaign could not start.");
@@ -95,7 +88,7 @@ $("#openTab").addEventListener("click", async () => {
 });
 $("#reset").addEventListener("click", async () => {
   if (runState.active) return setStatus("Stop the running campaign before resetting.", true);
-  runState = { active: false, index: 0, posted: 0, total: campaign.groups.length, status: "Progress reset." };
+  runState = { active: false, index: 0, posted: 0, total: 0, status: "Progress reset." };
   await chrome.storage.local.set({ autoCampaign: runState });
   paint();
   setStatus("Progress reset. Facebook posts were not deleted.");
@@ -141,7 +134,6 @@ chrome.storage.local.get(["campaign", "autoCampaign", "autoCampaignMedia"]).then
   if (result.autoCampaignMedia?.bytes?.length) {
     storedMedia = result.autoCampaignMedia;
   }
-  $("#groups").value = campaign.groups.join(", ");
   $("#caption").value = campaign.caption;
   paintStoredMedia();
   paint();

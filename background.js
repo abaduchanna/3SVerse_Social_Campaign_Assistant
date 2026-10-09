@@ -12,10 +12,6 @@ async function getFacebookTab() {
   return chrome.tabs.create({ url: FACEBOOK_HOME, active: false });
 }
 
-function normalizedName(value) {
-  return (value || "").normalize("NFKC").replace(/\s+/g, " ").trim().toLowerCase();
-}
-
 function groupIdentity(value) {
   try {
     const match = new URL(value).pathname.match(/^\/groups\/([^/]+)/i);
@@ -105,29 +101,13 @@ async function loadJoinedGroups(tabId) {
   return response.groups || [];
 }
 
-function resolveRequestedGroups(requested, joined) {
-  const resolved = new Map();
-  const add = group => resolved.set(groupIdentity(group.url), group);
-  for (const value of requested) {
-    const requestedIdentity = groupIdentity(value);
-    if (requestedIdentity) {
-      const match = joined.find(group => groupIdentity(group.url) === requestedIdentity);
-      if (!match) throw new Error(`Not joined: ${value}`);
-      add(match);
-      continue;
-    }
-
-    const trimmed = value.trim();
-    const caseExact = joined.filter(group => group.name.trim() === trimmed);
-    const matches = caseExact.length ? caseExact : joined.filter(group =>
-      normalizedName(group.name) === normalizedName(trimmed)
-    );
-    if (!matches.length) {
-      throw new Error(`Exact joined group not found: ${value}`);
-    }
-    matches.forEach(add);
+function allJoinedGroups(joined) {
+  const unique = new Map();
+  for (const group of joined) {
+    const identity = groupIdentity(group.url);
+    if (identity && group.name?.trim()) unique.set(identity, group);
   }
-  return [...resolved.values()];
+  return [...unique.values()];
 }
 
 async function saveState(state) {
@@ -254,11 +234,14 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       const tab = await getFacebookTab();
       const resolvingState = {
         active: false, tabId: tab.id, index: 0, posted: 0,
-        total: message.groups.length, status: "Reading and scrolling Facebook Your groups…", error: null
+        total: 0, status: "Reading and scrolling the complete Facebook Your groups list…", error: null
       };
       await saveState(resolvingState);
       const joined = await loadJoinedGroups(tab.id);
-      const targets = resolveRequestedGroups(message.groups, joined);
+      const targets = allJoinedGroups(joined);
+      if (!targets.length) {
+        throw new Error("No joined Facebook groups were found. Open Facebook, confirm you are signed in, and retry.");
+      }
       const state = {
         active: true,
         tabId: tab.id,
@@ -267,7 +250,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         index: 0,
         posted: 0,
         total: targets.length,
-        status: `Resolved ${message.groups.length} entries to ${targets.length} exact joined groups. Preparing 1 of ${targets.length}.`,
+        status: `Imported ${targets.length} joined groups from Facebook Your groups. Preparing 1 of ${targets.length}.`,
         error: null
       };
       await chrome.storage.local.set({ autoCampaign: state });

@@ -92,9 +92,14 @@
       .map(element => element.innerText || "")
       .find(text => /all groups you.ve joined\s*\(\d+\)/i.test(text));
     const expected = Number(expectedText?.match(/\((\d+)\)/)?.[1] || 0);
-    let best = joinedGroupsOnPage();
+    const collected = new Map();
+    const collectVisible = () => {
+      for (const group of joinedGroupsOnPage()) collected.set(groupIdentity(group.url), group);
+    };
+    collectVisible();
     let stable = 0;
-    for (let pass = 0; pass < 100 && (!expected || best.length < expected) && stable < 4; pass += 1) {
+    for (let pass = 0; pass < 120 && (!expected || collected.size < expected) && stable < 8; pass += 1) {
+      const before = collected.size;
       const scrollables = [...document.querySelectorAll("div")].filter(element =>
         element.scrollHeight > element.clientHeight + 100 && visible(element)
       );
@@ -105,13 +110,16 @@
         target.scrollTop = target.scrollHeight;
         target.dispatchEvent(new Event("scroll", { bubbles: true }));
       }
-      await sleep(900);
-      const next = joinedGroupsOnPage();
-      stable = next.length > best.length ? 0 : stable + 1;
-      if (next.length > best.length) best = next;
+      await sleep(1500);
+      collectVisible();
+      stable = collected.size > before ? 0 : stable + 1;
     }
-    if (!best.length) throw new Error("No joined Facebook groups were found on Your groups.");
-    return { ok: true, groups: best, expected };
+    const groups = [...collected.values()];
+    if (!groups.length) throw new Error("No joined Facebook groups were found on Your groups.");
+    if (expected && groups.length < expected) {
+      throw new Error(`Facebook loaded only ${groups.length} of ${expected} joined groups. Check the connection and retry.`);
+    }
+    return { ok: true, groups, expected };
   }
 
   async function focusComposer() {

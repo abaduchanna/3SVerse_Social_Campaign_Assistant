@@ -1,19 +1,19 @@
 # 3SVerse Social Campaign Assistant
 
-A local-first Chrome extension that posts a reviewed campaign sequentially to named Facebook groups from the Chrome profile you are already signed into.
+A local-first Chrome extension that imports every group joined by the Facebook account in your existing Chrome profile and posts a campaign to them sequentially.
 
 ## What it does
 
-- Accepts exact Facebook group names or group URLs separated by commas.
+- Opens Facebook **Your groups**, scrolls the complete joined-groups list, captures the direct group URLs, and deduplicates them automatically.
 - Reuses an existing Facebook tab, or opens one if needed.
-- Waits for slow pages, searches the exact group, opens the composer, fills the caption, and attaches the selected image or video.
+- Waits for slow pages, opens each joined group by its direct URL, opens the composer, fills the caption, and attaches the selected image or video.
 - Verifies the caption, selected media preview, and enabled Facebook **Post** button before publishing.
 - Remembers posted progress, waits 30 seconds between groups, and stops on the first error to avoid duplicates.
 
 ## What it intentionally does not do
 
 - It does not bypass Facebook login, account checks, rate limits, group rules, or moderation.
-- It only starts publishing after you explicitly click **Start auto-post campaign** for the displayed group list, caption, and selected media.
+- It only starts publishing after you explicitly click **Start auto-post campaign** for the imported joined-groups list, caption, and selected media.
 - It does not scrape members or collect personal data.
 - It cannot bypass Facebook throttling or future Facebook layout changes; errors stop the campaign and remain visible in the popup.
 
@@ -28,12 +28,11 @@ A local-first Chrome extension that posts a reviewed campaign sequentially to na
 
 ## Use
 
-1. Enter exact group names, separated by commas.
-2. Paste one approved campaign caption.
-3. Choose its image or video.
-4. Click **Start auto-post campaign** once. This is confirmation to publish the displayed campaign.
-5. Leave Chrome running. The assistant searches each group, replaces stale composer text, preserves paragraph breaks, attaches and verifies the chosen media when present, publishes, then waits 30 seconds before the next group.
-6. Use **Open Facebook review tab** to watch progress or **Stop campaign** to stop before the next post.
+1. Paste one approved campaign caption.
+2. Optionally choose its image or video.
+3. Click **Start auto-post campaign** once. This confirms publishing to every group listed in Facebook **Your groups**.
+4. Leave Chrome running. The assistant imports the complete joined-groups list, opens each direct group URL, replaces stale composer text, preserves paragraph breaks, attaches and verifies the chosen media when present, publishes, then waits 30 seconds before the next group.
+5. Use **Open Facebook review tab** to watch progress or **Stop campaign** to stop before the next post.
 
 If the file chooser says **No file chosen**, the full campaign is posted as text-only. A selected reel or image is stored locally for the running campaign and reused for every listed group.
 
@@ -52,6 +51,8 @@ Version 1.0.7 replaces synthetic DOM caption typing with Chrome DevTools Protoco
 Version 1.0.8 removes general Facebook search and every partial-name fallback from campaign routing. At Start, the assistant opens Facebook **Your groups**, scans and scrolls `All groups you've joined`, resolves every requested entry to an exact joined-group URL, and only then starts posting. A missing name stops the campaign. If multiple joined groups have the same exact name, it stops and lists their URLs so the owner can select the intended destination without guessing.
 
 Version 1.0.9 removes the duplicate-name URL burden. If several joined groups have the same exact title, one campaign entry automatically expands to every exact match; resolved URLs are deduplicated so no destination is posted twice. Partial matches remain forbidden and missing exact names still stop before posting.
+
+Version 1.1.0 removes the group-entry field completely. At Start, the assistant reads and scrolls Facebook **Your groups**, imports every joined group by its direct URL, deduplicates repeated cards by Facebook group ID, and uses that complete list as the campaign. The operator only supplies post text and optional media.
 
 Meta Business Suite remains the recommended scheduler for Facebook Page and Instagram posts. YouTube Studio remains the recommended scheduler for YouTube. Facebook does not provide a dependable public API for automatically posting to every group a personal account has joined.
 
