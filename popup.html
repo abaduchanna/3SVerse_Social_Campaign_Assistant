@@ -24,12 +24,13 @@
     <small id="mediaHint">Optional. Without a file, the assistant prepares a text-only post.</small>
 
     <section class="progress">
-      <span id="counter">0 of 0 prepared</span>
+      <span id="counter">0 of 0 posted</span>
       <span id="groupName">No group selected</span>
     </section>
-    <p id="status" role="status">Ready. The assistant never presses Facebook's final Post button.</p>
+    <p id="status" role="status">Prepare a draft, review it, then use the separate Post button to publish.</p>
     <section class="actions">
       <button id="prepare">Start / prepare next group</button>
+      <button id="publish" class="publish" disabled>Post this prepared draft</button>
       <button id="openTab" class="secondary">Open Facebook review tab</button>
       <div class="actionRow">
         <button id="save" class="secondary">Save</button>
@@ -37,7 +38,7 @@
       </div>
     </section>
   </main>
-  <footer>v1.0.4 · Local-first · Review before posting · 3sverse.com</footer>
+  <footer>v1.0.5 · Local-first · Confirm each post · 3sverse.com</footer>
   <script src="popup.js"></script>
 </body>
 </html>

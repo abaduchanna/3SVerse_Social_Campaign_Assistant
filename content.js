@@ -145,15 +145,33 @@
       ok: true,
       prepared: true,
       message: media?.bytes?.length
-        ? "Caption and media are attached. Review the Facebook tab and press Post yourself."
-        : "Caption is ready. Review the Facebook tab and press Post yourself."
+        ? "Caption and media are attached. Review them, then click Post this prepared draft."
+        : "Caption is ready. Review it, then click Post this prepared draft."
     };
+  }
+
+  async function publishPreparedPost() {
+    const dialog = await waitFor(() => [...document.querySelectorAll('[role="dialog"]')].find(visible), 10000);
+    const postButton = await waitFor(() => [...dialog.querySelectorAll('[role="button"], button')].find(button =>
+      visible(button)
+      && normalize(button.innerText || button.getAttribute("aria-label")) === "post"
+      && !button.matches(':disabled,[aria-disabled="true"]')
+    ), 10000);
+    postButton.click();
+    await waitFor(() => !document.contains(dialog) || !visible(dialog), 60000);
+    return { ok: true, posted: true, message: "Facebook confirmed the post. Ready for the next group." };
   }
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message.type === "PING") {
       sendResponse({ ok: true });
       return;
+    }
+    if (message.type === "PUBLISH_POST") {
+      publishPreparedPost()
+        .then(sendResponse)
+        .catch(error => sendResponse({ ok: false, error: error.message }));
+      return true;
     }
     if (message.type !== "PREPARE_POST") return;
 

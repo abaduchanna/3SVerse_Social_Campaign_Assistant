@@ -1,5 +1,5 @@
 const $ = selector => document.querySelector(selector);
-let campaign = { groups: [], caption: "", index: 0, facebookTabId: null };
+let campaign = { groups: [], caption: "", index: 0, facebookTabId: null, preparedGroup: null };
 
 function parseGroups(text) {
   return [...new Set(text.split(/[,\n]+/).map(value => value.trim()).filter(Boolean))];
@@ -7,8 +7,9 @@ function parseGroups(text) {
 
 function paint() {
   const total = campaign.groups.length;
-  $("#counter").textContent = `${Math.min(campaign.index, total)} of ${total} prepared`;
+  $("#counter").textContent = `${Math.min(campaign.index, total)} of ${total} posted`;
   $("#groupName").textContent = campaign.groups[campaign.index] || (total ? "Campaign complete" : "No group selected");
+  $("#publish").disabled = !campaign.preparedGroup;
 }
 
 function setStatus(message, error = false) {
@@ -17,8 +18,13 @@ function setStatus(message, error = false) {
 }
 
 async function saveCampaign() {
-  campaign.groups = parseGroups($("#groups").value);
-  campaign.caption = $("#caption").value.trim();
+  const nextGroups = parseGroups($("#groups").value);
+  const nextCaption = $("#caption").value.trim();
+  const draftChanged = JSON.stringify(nextGroups) !== JSON.stringify(campaign.groups)
+    || nextCaption !== campaign.caption;
+  campaign.groups = nextGroups;
+  campaign.caption = nextCaption;
+  if (draftChanged) campaign.preparedGroup = null;
   if (campaign.index >= campaign.groups.length) campaign.index = 0;
   await chrome.storage.local.set({ campaign });
   paint();
@@ -52,7 +58,7 @@ async function prepare() {
     if (!response?.ok) throw new Error(response?.error || "Facebook preparation failed.");
     campaign.facebookTabId = response.tabId || campaign.facebookTabId;
     if (response.prepared) {
-      campaign.index += 1;
+      campaign.preparedGroup = group;
       await chrome.storage.local.set({ campaign });
     }
     paint();
@@ -63,14 +69,41 @@ async function prepare() {
   }
 }
 
+async function publishPrepared() {
+  if (!campaign.preparedGroup || !campaign.facebookTabId) {
+    throw new Error("Prepare and review a Facebook draft first.");
+  }
+  $("#publish").disabled = true;
+  $("#publish").textContent = "Posting…";
+  setStatus(`Publishing to ${campaign.preparedGroup}…`);
+  try {
+    const response = await chrome.runtime.sendMessage({
+      type: "PUBLISH_POST",
+      tabId: campaign.facebookTabId,
+      group: campaign.preparedGroup
+    });
+    if (!response?.ok) throw new Error(response?.error || "Facebook did not confirm the post.");
+    campaign.index += 1;
+    campaign.preparedGroup = null;
+    await chrome.storage.local.set({ campaign });
+    paint();
+    setStatus(response.message);
+  } finally {
+    $("#publish").textContent = "Post this prepared draft";
+    $("#publish").disabled = !campaign.preparedGroup;
+  }
+}
+
 $("#save").addEventListener("click", () => saveCampaign().catch(error => setStatus(error.message, true)));
 $("#prepare").addEventListener("click", () => prepare().catch(error => setStatus(error.message, true)));
+$("#publish").addEventListener("click", () => publishPrepared().catch(error => setStatus(error.message, true)));
 $("#openTab").addEventListener("click", async () => {
   if (!campaign.facebookTabId) return setStatus("Prepare a group first so the Facebook tab can be found.", true);
   await chrome.tabs.update(campaign.facebookTabId, { active: true });
 });
 $("#reset").addEventListener("click", async () => {
   campaign.index = 0;
+  campaign.preparedGroup = null;
   await chrome.storage.local.set({ campaign });
   paint();
   setStatus("Progress reset. Nothing was deleted from Facebook.");

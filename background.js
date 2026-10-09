@@ -74,6 +74,17 @@ async function prepareThroughNavigation(tab, message) {
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message.type === "PUBLISH_POST") {
+    (async () => {
+      const tab = await chrome.tabs.get(message.tabId);
+      await waitForTabReady(tab.id);
+      await ensureContentScript(tab.id);
+      const response = await chrome.tabs.sendMessage(tab.id, message);
+      sendResponse({ ...response, tabId: tab.id });
+    })().catch(error => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
+
   if (message.type !== "PREPARE_POST") return;
 
   (async () => {
