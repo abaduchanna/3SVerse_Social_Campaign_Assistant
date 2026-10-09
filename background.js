@@ -63,14 +63,14 @@ async function waitForNavigation(tabId, previousUrl, timeout = 60000) {
 
 async function prepareThroughNavigation(tab, message) {
   await waitForTabReady(tab.id);
-  for (let step = 0; step < 4; step += 1) {
+  for (let step = 0; step < 6; step += 1) {
     await ensureContentScript(tab.id);
     const before = await chrome.tabs.get(tab.id);
     const response = await chrome.tabs.sendMessage(tab.id, message);
     if (!response?.navigating) return response;
     await waitForNavigation(tab.id, before.url);
   }
-  throw new Error("Facebook opened too many intermediate pages. Use a direct Facebook group URL and retry.");
+  throw new Error("Facebook could not reach the selected group. Confirm the exact group name or use its Facebook URL.");
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {

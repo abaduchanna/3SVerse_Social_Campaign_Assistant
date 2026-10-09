@@ -48,12 +48,17 @@
     }
 
     const link = await waitFor(() => {
-      const exact = [...document.querySelectorAll('a[href*="/groups/"]')].find(anchor =>
-        visible(anchor) && normalize(anchor.innerText) === normalize(groupName)
-      );
-      return exact || findByText('a[href*="/groups/"]', [groupName]);
+      const wanted = normalize(groupName);
+      const candidates = [...document.querySelectorAll('a[href*="/groups/"]')].filter(visible);
+      const nameFor = anchor => {
+        const imageAlt = anchor.querySelector('img[alt]')?.getAttribute("alt") || "";
+        const imageName = imageAlt.replace(/^profile photo of\s+/i, "");
+        return normalize(imageName || anchor.getAttribute("aria-label") || anchor.innerText);
+      };
+      return candidates.find(anchor => nameFor(anchor) === wanted)
+        || candidates.find(anchor => nameFor(anchor).includes(wanted));
     });
-    link.click();
+    location.href = link.href;
     return { navigating: true };
   }
 
@@ -120,8 +125,8 @@
         return;
       }
 
-      const heading = document.querySelector('h1, [role="main"] h2');
-      if (!directUrl && heading && !normalize(heading.innerText).includes(normalize(group))) {
+      const pageTitle = normalize(document.title.replace(/\|\s*facebook.*$/i, ""));
+      if (!directUrl && !pageTitle.includes(normalize(group))) {
         sendResponse({ ok: true, navigating: true, message: `Searching for ${group}…` });
         location.href = `https://www.facebook.com/search/groups/?q=${encodeURIComponent(group)}`;
         return;

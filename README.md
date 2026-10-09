@@ -38,6 +38,8 @@ A local-first Chrome extension that helps prepare Facebook group posts from the 
 
 If the file chooser says **No file chosen**, the assistant deliberately prepares a text-only post. Select the reel again before starting the next group if you want media attached; Chrome does not allow an extension to retain a local file selection after its popup closes.
 
+Version 1.0.2 recognizes Facebook's current group-search cards by their profile-photo accessibility label, opens the exact result, and verifies the destination from the group page title before preparing the composer.
+
 Meta Business Suite remains the recommended scheduler for Facebook Page and Instagram posts. YouTube Studio remains the recommended scheduler for YouTube. Facebook does not provide a dependable public API for automatically posting to every group a personal account has joined.
 
 ## Privacy
