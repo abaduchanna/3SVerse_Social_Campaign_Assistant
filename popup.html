@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>3SVerse Campaign Assistant</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <img src="brand/3SVerse_Logo_Vector_1200x300.png" alt="3SVerse">
+    <p>Social Campaign Assistant</p>
+  </header>
+  <main>
+    <label for="groups">Facebook groups</label>
+    <textarea id="groups" rows="4" placeholder="Group One, Group Two, Group Three"></textarea>
+    <small>Use exact names, separated by commas. You can also paste Facebook group URLs.</small>
+
+    <label for="caption">Post text</label>
+    <textarea id="caption" rows="7" placeholder="Paste the campaign caption here"></textarea>
+
+    <label for="media">Image or video</label>
+    <input id="media" type="file" accept="image/*,video/mp4,video/webm">
+
+    <section class="progress">
+      <span id="counter">0 of 0 prepared</span>
+      <span id="groupName">No group selected</span>
+    </section>
+    <button id="save" class="secondary">Save campaign</button>
+    <button id="prepare">Prepare next group</button>
+    <button id="openTab" class="secondary">Open Facebook review tab</button>
+    <button id="reset" class="ghost">Reset progress</button>
+    <p id="status" role="status">Ready. The assistant never presses Facebook's final Post button.</p>
+  </main>
+  <footer>Local-first · Review before posting · 3sverse.com</footer>
+  <script src="popup.js"></script>
+</body>
+</html>
