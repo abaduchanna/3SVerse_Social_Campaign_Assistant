@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 
 const data = { autoCampaignMedia: { name: "reel.mp4", bytes: [1, 2, 3] } };
 const sent = [];
+const debuggerCommands = [];
 let messageListener;
 let alarmListener;
 let scheduledAlarm;
@@ -14,13 +15,19 @@ global.chrome = {
     sendMessage: async (_tabId, message) => {
       sent.push(message.type);
       if (message.type === "PING") return { ok: true };
-      if (message.type === "PREPARE_POST") return { ok: true, prepared: true };
+      if (message.type === "PREPARE_POST") return { ok: true, editorReady: true };
+      if (message.type === "VERIFY_COMPOSER") return { ok: true, prepared: true };
       if (message.type === "PUBLISH_POST") return { ok: true, posted: true };
       throw new Error(`Unexpected message: ${message.type}`);
     },
     onUpdated: { addListener() {}, removeListener() {} }
   },
   scripting: { executeScript: async () => {} },
+  debugger: {
+    async attach() {},
+    async detach() {},
+    async sendCommand(_target, method, params) { debuggerCommands.push({ method, params }); }
+  },
   storage: {
     local: {
       async get(keys) {
@@ -74,9 +81,13 @@ function send(message) {
   assert.equal(data.autoCampaign.posted, 2);
   assert.equal(data.autoCampaign.active, false);
   assert.equal(data.autoCampaign.status, "Campaign complete: 2 of 2 posted.");
-  assert.equal(data.autoCampaignMedia, undefined);
+  assert.equal(data.autoCampaignMedia.name, "reel.mp4");
   assert.equal(sent.filter(type => type === "PREPARE_POST").length, 2);
+  assert.equal(sent.filter(type => type === "VERIFY_COMPOSER").length, 2);
   assert.equal(sent.filter(type => type === "PUBLISH_POST").length, 2);
+  assert.equal(debuggerCommands.filter(command => command.method === "Input.insertText").length, 2);
+  assert.equal(debuggerCommands.find(command => command.method === "Input.insertText").params.text,
+    "Line one\n\nhttps://3sverse.com\n#VidaPay");
   process.stdout.write("background campaign test passed\n");
 })().catch(error => {
   console.error(error);

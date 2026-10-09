@@ -1,6 +1,7 @@
 const $ = selector => document.querySelector(selector);
 let campaign = { groups: [], caption: "", facebookTabId: null };
 let runState = { active: false, index: 0, posted: 0, total: 0, status: "Ready." };
+let storedMedia = null;
 
 function parseGroups(text) {
   return [...new Set(text.split(/[,\n]+/).map(value => value.trim()).filter(Boolean))];
@@ -23,6 +24,16 @@ function setStatus(message, error = false) {
   $("#status").style.color = error ? "#ff9a9a" : "#aab3d4";
 }
 
+function paintStoredMedia() {
+  const hasStoredMedia = Boolean(storedMedia?.bytes?.length);
+  $("#media").hidden = hasStoredMedia;
+  $("#storedMediaCard").hidden = !hasStoredMedia;
+  $("#storedMediaName").textContent = hasStoredMedia ? `Stored reel/image: ${storedMedia.name}` : "";
+  $("#mediaHint").textContent = hasStoredMedia
+    ? "This stored file will be uploaded to every group in the campaign."
+    : "Optional. Without a file, every group receives a text-only post.";
+}
+
 async function saveCampaign() {
   campaign.groups = parseGroups($("#groups").value);
   campaign.caption = $("#caption").value.trim();
@@ -33,7 +44,7 @@ async function saveCampaign() {
 
 async function mediaPayload() {
   const file = $("#media").files[0];
-  if (!file) return null;
+  if (!file) return storedMedia;
   if (file.size > 50 * 1024 * 1024) throw new Error("Choose a media file smaller than 50 MB.");
   return { name: file.name, type: file.type, bytes: [...new Uint8Array(await file.arrayBuffer())] };
 }
@@ -45,8 +56,8 @@ async function startCampaign() {
 
   $("#prepare").disabled = true;
   $("#prepare").textContent = "Starting…";
-  const hasMedia = Boolean($("#media").files[0]);
   const media = await mediaPayload();
+  const hasMedia = Boolean(media?.bytes?.length);
   await chrome.storage.local.set({ autoCampaignMedia: media });
   setStatus(`Starting ${campaign.groups.length} posts${hasMedia ? " with the selected reel/image" : " without media"}…`);
   const response = await chrome.runtime.sendMessage({
@@ -90,11 +101,30 @@ $("#reset").addEventListener("click", async () => {
   setStatus("Progress reset. Facebook posts were not deleted.");
 });
 
-$("#media").addEventListener("change", () => {
+$("#media").addEventListener("change", async () => {
   const file = $("#media").files[0];
-  $("#mediaHint").textContent = file
-    ? `Selected: ${file.name} (${(file.size / 1024 / 1024).toFixed(1)} MB)`
-    : "Optional. Without a file, every group receives a text-only post.";
+  if (!file) return;
+  try {
+    storedMedia = await mediaPayload();
+    await chrome.storage.local.set({ autoCampaignMedia: storedMedia });
+    paintStoredMedia();
+  } catch (error) {
+    storedMedia = null;
+    setStatus(error.message, true);
+  }
+});
+
+$("#replaceMedia").addEventListener("click", () => {
+  $("#media").hidden = false;
+  $("#media").click();
+});
+
+$("#clearMedia").addEventListener("click", async () => {
+  storedMedia = null;
+  $("#media").value = "";
+  await chrome.storage.local.remove("autoCampaignMedia");
+  paintStoredMedia();
+  setStatus("Stored media cleared. The next campaign will be text-only unless you choose another file.");
 });
 
 chrome.storage.onChanged.addListener(changes => {
@@ -105,11 +135,15 @@ chrome.storage.onChanged.addListener(changes => {
   setStatus(runState.status || "Campaign updated.", Boolean(runState.error));
 });
 
-chrome.storage.local.get(["campaign", "autoCampaign"]).then(result => {
+chrome.storage.local.get(["campaign", "autoCampaign", "autoCampaignMedia"]).then(result => {
   if (result.campaign) campaign = { ...campaign, ...result.campaign };
   if (result.autoCampaign) runState = { ...runState, ...result.autoCampaign };
+  if (result.autoCampaignMedia?.bytes?.length) {
+    storedMedia = result.autoCampaignMedia;
+  }
   $("#groups").value = campaign.groups.join(", ");
   $("#caption").value = campaign.caption;
+  paintStoredMedia();
   paint();
   setStatus(runState.status || "Ready.", Boolean(runState.error));
 });

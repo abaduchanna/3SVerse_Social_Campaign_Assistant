@@ -17,6 +17,10 @@ main { padding: 18px 20px; }
 label { display: block; margin: 12px 0 6px; font-weight: 700; }
 textarea, input[type="file"] { width: 100%; border: 1px solid var(--line); border-radius: 10px; padding: 10px; background: #080d20; color: var(--text); resize: vertical; }
 small { display: block; margin-top: 5px; color: var(--muted); }
+.storedMedia { padding: 10px; border: 1px solid #20c56b; border-radius: 10px; background: #092417; color: #a9f5c9; }
+.storedMedia span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
+.storedMedia div { display: flex; gap: 8px; }
+button.mediaAction { width: auto; flex: 1; margin-top: 7px; padding: 7px; background: #153524; color: #d7ffe7; border: 1px solid #287a4e; }
 button { width: 100%; margin-top: 10px; border: 0; border-radius: 10px; padding: 12px; background: linear-gradient(90deg, var(--cyan), var(--pink)); color: #050817; font-weight: 800; cursor: pointer; }
 button.secondary { background: #151e42; color: var(--text); border: 1px solid var(--line); }
 button.stop { background: #8d2435; color: var(--text); }

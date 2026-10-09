@@ -80,6 +80,38 @@ async function saveState(state) {
   return state;
 }
 
+async function insertCaptionWithDebugger(tabId, caption) {
+  const target = { tabId };
+  let attached = false;
+  try {
+    await chrome.debugger.attach(target, "1.3");
+    attached = true;
+    await chrome.debugger.sendCommand(target, "Input.dispatchKeyEvent", {
+      type: "keyDown", key: "a", code: "KeyA", modifiers: 2,
+      windowsVirtualKeyCode: 65, nativeVirtualKeyCode: 65
+    });
+    await chrome.debugger.sendCommand(target, "Input.dispatchKeyEvent", {
+      type: "keyUp", key: "a", code: "KeyA", modifiers: 2,
+      windowsVirtualKeyCode: 65, nativeVirtualKeyCode: 65
+    });
+    await chrome.debugger.sendCommand(target, "Input.dispatchKeyEvent", {
+      type: "keyDown", key: "Backspace", code: "Backspace",
+      windowsVirtualKeyCode: 8, nativeVirtualKeyCode: 8
+    });
+    await chrome.debugger.sendCommand(target, "Input.dispatchKeyEvent", {
+      type: "keyUp", key: "Backspace", code: "Backspace",
+      windowsVirtualKeyCode: 8, nativeVirtualKeyCode: 8
+    });
+    await chrome.debugger.sendCommand(target, "Input.insertText", { text: caption });
+  } catch (error) {
+    throw new Error(`Trusted Facebook caption input failed: ${error.message}`);
+  } finally {
+    if (attached) {
+      try { await chrome.debugger.detach(target); } catch (_) {}
+    }
+  }
+}
+
 async function resumeCampaign() {
   if (campaignBusy) return;
   campaignBusy = true;
@@ -92,7 +124,6 @@ async function resumeCampaign() {
       state.active = false;
       state.status = `Campaign complete: ${state.posted} of ${state.total} posted.`;
       await saveState(state);
-      await chrome.storage.local.remove("autoCampaignMedia");
       return;
     }
 
@@ -103,11 +134,16 @@ async function resumeCampaign() {
     const tab = await chrome.tabs.get(state.tabId);
     const prepared = await prepareThroughNavigation(tab, {
       type: "PREPARE_POST",
-      group,
+      group
+    });
+    if (!prepared?.ok || !prepared.editorReady) throw new Error(prepared?.error || "Facebook editor did not become ready.");
+    await insertCaptionWithDebugger(state.tabId, state.caption);
+    const verified = await chrome.tabs.sendMessage(state.tabId, {
+      type: "VERIFY_COMPOSER",
       caption: state.caption,
       media
     });
-    if (!prepared?.ok || !prepared.prepared) throw new Error(prepared?.error || "Facebook draft preparation failed.");
+    if (!verified?.ok || !verified.prepared) throw new Error(verified?.error || "Facebook draft verification failed.");
 
     const beforePublish = (await chrome.storage.local.get("autoCampaign")).autoCampaign;
     if (!beforePublish?.active) return;
@@ -125,14 +161,12 @@ async function resumeCampaign() {
       state.active = false;
       state.status = `Campaign stopped. ${state.posted} of ${state.total} posted.`;
       await saveState(state);
-      await chrome.storage.local.remove("autoCampaignMedia");
       return;
     }
     if (state.index >= state.groups.length) {
       state.active = false;
       state.status = `Campaign complete: ${state.posted} of ${state.total} posted.`;
       await saveState(state);
-      await chrome.storage.local.remove("autoCampaignMedia");
       return;
     }
     state.status = `Posted ${state.posted} of ${state.total}. Next group starts in 30 seconds.`;
@@ -145,7 +179,6 @@ async function resumeCampaign() {
     state.error = error.message;
     state.status = `Stopped after ${state.posted || 0} posts: ${error.message}`;
     await saveState(state);
-    await chrome.storage.local.remove("autoCampaignMedia");
   } finally {
     campaignBusy = false;
   }
@@ -189,7 +222,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       state.active = false;
       state.status = `Campaign stopped. ${state.posted || 0} of ${state.total || 0} posted.`;
       await saveState(state);
-      await chrome.storage.local.remove("autoCampaignMedia");
       sendResponse({ ok: true, state });
     })().catch(error => sendResponse({ ok: false, error: error.message }));
     return true;

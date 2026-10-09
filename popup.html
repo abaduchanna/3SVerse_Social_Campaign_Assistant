@@ -21,6 +21,13 @@
 
     <label for="media">Image or video</label>
     <input id="media" type="file" accept="image/*,video/mp4,video/webm">
+    <div id="storedMediaCard" class="storedMedia" hidden>
+      <span id="storedMediaName"></span>
+      <div>
+        <button id="replaceMedia" type="button" class="mediaAction">Replace</button>
+        <button id="clearMedia" type="button" class="mediaAction">Clear</button>
+      </div>
+    </div>
     <small id="mediaHint">Optional. Without a file, the assistant prepares a text-only post.</small>
 
     <section class="progress">
@@ -38,7 +45,7 @@
       </div>
     </section>
   </main>
-  <footer>v1.0.6 · One-click sequential campaign · 3sverse.com</footer>
+  <footer>v1.0.7 · Trusted caption input · Persistent reel · 3sverse.com</footer>
   <script src="popup.js"></script>
 </body>
 </html>

@@ -32,48 +32,6 @@
     });
   }
 
-  function escapeHtml(value) {
-    return value
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#039;");
-  }
-
-  function selectEditorContents(editor) {
-    editor.focus();
-    const selection = window.getSelection();
-    const range = document.createRange();
-    range.selectNodeContents(editor);
-    selection.removeAllRanges();
-    selection.addRange(range);
-  }
-
-  async function replaceEditorText(editor, text) {
-    selectEditorContents(editor);
-    document.execCommand("delete", false, null);
-
-    const lines = text.replace(/\r\n?/g, "\n").split("\n");
-    lines.forEach((line, index) => {
-      if (line) document.execCommand("insertText", false, line);
-      if (index < lines.length - 1) document.execCommand("insertParagraph", false, null);
-    });
-
-    await sleep(250);
-    if (normalize(editor.innerText || editor.textContent) !== normalize(text)) {
-      selectEditorContents(editor);
-      document.execCommand("delete", false, null);
-      const html = lines.map(line => `<div>${line ? escapeHtml(line) : "<br>"}</div>`).join("");
-      document.execCommand("insertHTML", false, html);
-      await sleep(250);
-    }
-
-    if (normalize(editor.innerText || editor.textContent) !== normalize(text)) {
-      throw new Error("Facebook did not accept the caption cleanly. The draft was stopped to prevent duplicate text.");
-    }
-  }
-
   async function openExactGroup(groupName) {
     const query = encodeURIComponent(groupName);
     const searchUrl = `https://www.facebook.com/search/groups/?q=${query}`;
@@ -106,7 +64,7 @@
     }
   }
 
-  async function prepareComposer(caption, media) {
+  async function focusComposer() {
     const openDialog = [...document.querySelectorAll('[role="dialog"]')].find(dialog =>
       visible(dialog) && dialog.querySelector('[contenteditable="true"][role="textbox"]')
     );
@@ -125,7 +83,20 @@
     });
     const dialog = editor.closest('[role="dialog"]');
     if (!dialog) throw new Error("Facebook's active Create post dialog was not found.");
-    await replaceEditorText(editor, caption);
+    editor.focus();
+    return { ok: true, editorReady: true };
+  }
+
+  async function verifyComposer(caption, media) {
+    const editor = await waitFor(() => [...document.querySelectorAll(
+      '[role="dialog"] [contenteditable="true"][role="textbox"]'
+    )].filter(visible).at(-1));
+    const dialog = editor.closest('[role="dialog"]');
+    if (!dialog) throw new Error("Facebook's active Create post dialog was not found.");
+    await sleep(500);
+    if (normalize(editor.innerText || editor.textContent) !== normalize(caption)) {
+      throw new Error("Facebook did not retain the full caption exactly. Nothing was posted.");
+    }
 
     if (media?.bytes?.length) {
       // Let Facebook finish any URL-card preview first so it cannot be mistaken for the selected file.
@@ -188,6 +159,12 @@
         .catch(error => sendResponse({ ok: false, error: error.message }));
       return true;
     }
+    if (message.type === "VERIFY_COMPOSER") {
+      verifyComposer(message.caption, message.media)
+        .then(sendResponse)
+        .catch(error => sendResponse({ ok: false, error: error.message }));
+      return true;
+    }
     if (message.type !== "PREPARE_POST") return;
 
     (async () => {
@@ -220,7 +197,7 @@
         return;
       }
 
-      sendResponse(await prepareComposer(message.caption, message.media));
+      sendResponse(await focusComposer());
     })().catch(error => sendResponse({ ok: false, error: error.message }));
 
     return true;

@@ -47,6 +47,8 @@ Version 1.0.5 adds a separate **Post this prepared draft** confirmation button. 
 
 Version 1.0.6 changes that flow to one-click sequential posting. **Start auto-post campaign** confirms the whole displayed campaign; the background worker posts one group at a time, waits 30 seconds, resumes through a Chrome alarm, persists progress locally, and stops on the first error. Facebook line breaks now use editor paragraphs rather than unsupported line-break insertion.
 
+Version 1.0.7 replaces synthetic DOM caption typing with Chrome DevTools Protocol trusted input for Facebook's Lexical editor. The complete caption—including blank lines between the website and hashtags—is inserted in one operation and must pass an exact normalized-text check before media or posting continues. Selected media is saved immediately in local extension storage and remains available after the popup/panel is reopened or a Facebook error stops the campaign; the hint shows the stored filename even though browsers do not permit repopulating the native file chooser display.
+
 Meta Business Suite remains the recommended scheduler for Facebook Page and Instagram posts. YouTube Studio remains the recommended scheduler for YouTube. Facebook does not provide a dependable public API for automatically posting to every group a personal account has joined.
 
 ## Privacy
