@@ -9,14 +9,20 @@
   const controls = () => [...document.querySelectorAll('button,[role="button"],[role="menuitem"],label')].filter(visible);
   const exactControl = text => controls().find(element => norm(element.innerText || element.getAttribute("aria-label")) === norm(text));
 
-  async function waitFor(getter, timeout = 60000, interval = 300) {
+  function screenSummary() {
+    const headings = [...document.querySelectorAll("h1,h2,h3")].filter(visible).map(element => element.innerText.trim()).filter(Boolean).slice(-4);
+    const buttons = controls().map(element => (element.innerText || element.getAttribute("aria-label") || "").trim()).filter(Boolean).slice(-12);
+    return `screen=[${headings.join(" > ") || "no heading"}], controls=[${buttons.join(" | ") || "none"}]`;
+  }
+
+  async function waitFor(getter, timeout = 60000, interval = 300, expected = "control") {
     const started = Date.now();
     while (Date.now() - started < timeout) {
       const value = getter();
       if (value) return value;
       await sleep(interval);
     }
-    throw new Error("Meta Business Suite did not show the expected control in time.");
+    throw new Error(`Meta did not show ${expected} in time; ${screenSummary()}`);
   }
 
   function modalRoot() {
@@ -24,9 +30,10 @@
   }
 
   async function openCreateMenu() {
+    if (exactControl("Reel") || exactControl("Create reel") || exactControl("Story") || exactControl("Create Story")) return;
     const create = await waitFor(() => exactControl("Create"));
     create.click();
-    await waitFor(() => exactControl("Create Story") || exactControl("Create reel"));
+    await waitFor(() => exactControl("Story") || exactControl("Create Story") || exactControl("Reel") || exactControl("Create reel"), 15000, 250, "the Create menu options");
   }
 
   async function openComposer(type) {
@@ -36,9 +43,10 @@
       await waitFor(() => [...document.querySelectorAll("h1,h2")].some(element => visible(element) && norm(element.innerText) === "create post"));
     } else {
       await openCreateMenu();
-      const label = type === "reel" ? "Create reel" : "Create Story";
-      (await waitFor(() => exactControl(label))).click();
-      await waitFor(() => [...document.querySelectorAll("h1,h2")].some(element => visible(element) && norm(element.innerText) === norm(label)));
+      const labels = type === "reel" ? ["Reel", "Create reel"] : ["Story", "Create Story"];
+      (await waitFor(() => labels.map(exactControl).find(Boolean), 15000, 250, `${type} in Meta's Create menu`)).click();
+      const heading = type === "reel" ? "create reel" : "create story";
+      await waitFor(() => [...document.querySelectorAll("h1,h2")].some(element => visible(element) && norm(element.innerText) === heading), 30000, 300, `the ${heading} composer`);
     }
     await sleep(700);
   }
@@ -57,25 +65,47 @@
 
   async function attachFile(media, type) {
     const root = modalRoot();
-    if (!root.querySelector('input[type="file"]')) {
-      const uploadLabel = type === "reel" ? "Add video" : type === "story" ? "Add media" : "Add photos/videos";
-      const upload = exactControl(uploadLabel)
-        || controls().find(element => /add (video|photo|media)|upload (video|photo|media)/i.test(element.innerText || element.getAttribute("aria-label") || ""));
-      upload?.click();
-    }
-    const input = await waitFor(() => {
-      const inputs = [...root.querySelectorAll('input[type="file"]')];
-      return inputs.find(element => {
-        const accept = element.accept || "";
-        return type !== "reel" || !accept || /video/i.test(accept);
-      }) || inputs[0];
-    }, 20000);
     const file = new File([new Uint8Array(media.bytes)], media.name, { type: media.type });
     const transfer = new DataTransfer();
     transfer.items.add(file);
-    input.files = transfer.files;
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-    input.dispatchEvent(new Event("change", { bubbles: true }));
+    const acceptInput = input => {
+      const accept = input.accept || "";
+      return type !== "reel" || !accept || /video/i.test(accept);
+    };
+    const applyFile = input => {
+      if (!input) return false;
+      try {
+        input.files = transfer.files;
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+        return true;
+      } catch (_) { return false; }
+    };
+    const existing = [...document.querySelectorAll('input[type="file"]')].find(acceptInput);
+    if (existing && applyFile(existing)) return;
+
+    const upload = controls().find(element => /add (video|photo|media)|upload (video|photo|media)/i.test(element.innerText || element.getAttribute("aria-label") || ""));
+    if (!upload) throw new Error(`Meta upload button was not found; ${screenSummary()}`);
+    await new Promise((resolve, reject) => {
+      let settled = false;
+      const finish = (ok, error) => {
+        if (settled) return;
+        settled = true;
+        observer.disconnect();
+        clearTimeout(timer);
+        ok ? resolve() : reject(error);
+      };
+      const inspect = node => {
+        if (node?.matches?.('input[type="file"]') && acceptInput(node) && applyFile(node)) return finish(true);
+        const child = node?.querySelectorAll ? [...node.querySelectorAll('input[type="file"]')].find(acceptInput) : null;
+        if (child && applyFile(child)) finish(true);
+      };
+      const observer = new MutationObserver(records => records.forEach(record => record.addedNodes.forEach(inspect)));
+      observer.observe(document.documentElement, { childList: true, subtree: true });
+      const timer = setTimeout(() => finish(false, new Error(`Meta did not expose its file input after the upload click; ${screenSummary()}`)), 20000);
+      upload.click();
+      [...document.querySelectorAll('input[type="file"]')].filter(acceptInput).forEach(input => { if (applyFile(input)) finish(true); });
+    });
   }
 
   async function focusCaption(type) {
