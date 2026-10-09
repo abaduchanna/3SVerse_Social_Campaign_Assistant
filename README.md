@@ -42,6 +42,8 @@ Version 1.0.2 recognizes Facebook's current group-search cards by their profile-
 
 Version 1.0.3 scopes text entry to Facebook's active **Create post** dialog, ignores the covered background-feed textbox, prevents duplicate caption insertion, and confirms the dialog's Post button is enabled before marking a group prepared.
 
+Version 1.0.4 replaces any stale draft instead of appending to it, inserts caption line breaks explicitly, scopes the file input to the active **Create post** dialog, and waits for a visible media preview before marking a reel or image as attached.
+
 Meta Business Suite remains the recommended scheduler for Facebook Page and Instagram posts. YouTube Studio remains the recommended scheduler for YouTube. Facebook does not provide a dependable public API for automatically posting to every group a personal account has joined.
 
 ## Privacy

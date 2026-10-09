@@ -32,14 +32,38 @@
     });
   }
 
-  function setEditorText(editor, text) {
-    const existing = normalize(editor.innerText || editor.textContent);
-    const fingerprint = normalize(text).slice(0, 80);
-    if (fingerprint && existing.includes(fingerprint)) return;
+  function countOccurrences(value, needle) {
+    if (!needle) return 0;
+    let count = 0;
+    let position = 0;
+    while ((position = value.indexOf(needle, position)) !== -1) {
+      count += 1;
+      position += needle.length;
+    }
+    return count;
+  }
+
+  function replaceEditorText(editor, text) {
     editor.focus();
-    document.execCommand("selectAll", false, null);
-    document.execCommand("insertText", false, text);
-    editor.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: text }));
+
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(editor);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    document.execCommand("delete", false, null);
+
+    const lines = text.replace(/\r\n?/g, "\n").split("\n");
+    lines.forEach((line, index) => {
+      if (line) document.execCommand("insertText", false, line);
+      if (index < lines.length - 1) document.execCommand("insertLineBreak", false, null);
+    });
+
+    const rendered = normalize(editor.innerText || editor.textContent);
+    const fingerprint = normalize(text).slice(0, 80);
+    if (!rendered || countOccurrences(rendered, fingerprint) !== 1) {
+      throw new Error("Facebook did not accept the caption cleanly. The draft was stopped to prevent duplicate text.");
+    }
   }
 
   async function openExactGroup(groupName) {
@@ -86,28 +110,44 @@
       return modalEditors.find(element => normalize(element.getAttribute("aria-label")).includes("create a public post"))
         || modalEditors.at(-1);
     });
-    setEditorText(editor, caption);
+    const dialog = editor.closest('[role="dialog"]');
+    if (!dialog) throw new Error("Facebook's active Create post dialog was not found.");
+    replaceEditorText(editor, caption);
 
     if (media?.bytes?.length) {
-      const input = await waitFor(() => [...document.querySelectorAll('input[type="file"]')].find(input =>
+      const input = await waitFor(() => [...dialog.querySelectorAll('input[type="file"]')].find(input =>
         (input.accept || "").includes("video") || (input.accept || "").includes("image") || input.multiple
       ), 15000);
+      const previousLargeMedia = new Set([...dialog.querySelectorAll("img, video")].filter(element => {
+        const rect = element.getBoundingClientRect();
+        return rect.width >= 180 && rect.height >= 90;
+      }));
       const bytes = new Uint8Array(media.bytes);
       const file = new File([bytes], media.name, { type: media.type || "video/mp4" });
       const transfer = new DataTransfer();
       transfer.items.add(file);
       input.files = transfer.files;
       input.dispatchEvent(new Event("change", { bubbles: true }));
+
+      await waitFor(() => [...dialog.querySelectorAll("img, video")].some(element => {
+        const rect = element.getBoundingClientRect();
+        return !previousLargeMedia.has(element) && rect.width >= 180 && rect.height >= 90;
+      }), 60000);
     }
 
     await waitFor(() => {
-      const dialog = editor.closest('[role="dialog"]');
-      const postButton = dialog && [...dialog.querySelectorAll('[role="button"], button')]
+      const postButton = [...dialog.querySelectorAll('[role="button"], button')]
         .find(button => normalize(button.innerText || button.getAttribute("aria-label")) === "post");
       return postButton && !postButton.matches(':disabled,[aria-disabled="true"]');
-    }, 15000);
+    }, media?.bytes?.length ? 60000 : 15000);
 
-    return { ok: true, prepared: true, message: "Draft prepared. Review the Facebook tab and press Post yourself." };
+    return {
+      ok: true,
+      prepared: true,
+      message: media?.bytes?.length
+        ? "Caption and media are attached. Review the Facebook tab and press Post yourself."
+        : "Caption is ready. Review the Facebook tab and press Post yourself."
+    };
   }
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
