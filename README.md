@@ -40,6 +40,8 @@ If the file chooser says **No file chosen**, the assistant deliberately prepares
 
 Version 1.0.2 recognizes Facebook's current group-search cards by their profile-photo accessibility label, opens the exact result, and verifies the destination from the group page title before preparing the composer.
 
+Version 1.0.3 scopes text entry to Facebook's active **Create post** dialog, ignores the covered background-feed textbox, prevents duplicate caption insertion, and confirms the dialog's Post button is enabled before marking a group prepared.
+
 Meta Business Suite remains the recommended scheduler for Facebook Page and Instagram posts. YouTube Studio remains the recommended scheduler for YouTube. Facebook does not provide a dependable public API for automatically posting to every group a personal account has joined.
 
 ## Privacy

@@ -33,6 +33,9 @@
   }
 
   function setEditorText(editor, text) {
+    const existing = normalize(editor.innerText || editor.textContent);
+    const fingerprint = normalize(text).slice(0, 80);
+    if (fingerprint && existing.includes(fingerprint)) return;
     editor.focus();
     document.execCommand("selectAll", false, null);
     document.execCommand("insertText", false, text);
@@ -77,7 +80,12 @@
     ]));
     composerTrigger.click();
 
-    const editor = await waitFor(() => [...document.querySelectorAll('[contenteditable="true"][role="textbox"]')].find(visible));
+    const editor = await waitFor(() => {
+      const modalEditors = [...document.querySelectorAll('[role="dialog"] [contenteditable="true"][role="textbox"]')]
+        .filter(visible);
+      return modalEditors.find(element => normalize(element.getAttribute("aria-label")).includes("create a public post"))
+        || modalEditors.at(-1);
+    });
     setEditorText(editor, caption);
 
     if (media?.bytes?.length) {
@@ -91,6 +99,13 @@
       input.files = transfer.files;
       input.dispatchEvent(new Event("change", { bubbles: true }));
     }
+
+    await waitFor(() => {
+      const dialog = editor.closest('[role="dialog"]');
+      const postButton = dialog && [...dialog.querySelectorAll('[role="button"], button')]
+        .find(button => normalize(button.innerText || button.getAttribute("aria-label")) === "post");
+      return postButton && !postButton.matches(':disabled,[aria-disabled="true"]');
+    }, 15000);
 
     return { ok: true, prepared: true, message: "Draft prepared. Review the Facebook tab and press Post yourself." };
   }
