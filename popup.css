@@ -19,7 +19,7 @@ textarea, input[type="file"] { width: 100%; border: 1px solid var(--line); borde
 small { display: block; margin-top: 5px; color: var(--muted); }
 button { width: 100%; margin-top: 10px; border: 0; border-radius: 10px; padding: 12px; background: linear-gradient(90deg, var(--cyan), var(--pink)); color: #050817; font-weight: 800; cursor: pointer; }
 button.secondary { background: #151e42; color: var(--text); border: 1px solid var(--line); }
-button.publish { background: #20c56b; color: #04130a; }
+button.stop { background: #8d2435; color: var(--text); }
 button.ghost { background: transparent; color: var(--muted); }
 button:disabled { opacity: .5; cursor: wait; }
 .actions { position: sticky; bottom: 0; z-index: 5; margin: 12px -20px -18px; padding: 10px 20px 14px; border-top: 1px solid var(--line); background: rgba(5, 8, 23, .97); box-shadow: 0 -10px 24px rgba(0, 0, 0, .38); }

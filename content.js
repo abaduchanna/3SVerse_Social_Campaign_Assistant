@@ -32,36 +32,44 @@
     });
   }
 
-  function countOccurrences(value, needle) {
-    if (!needle) return 0;
-    let count = 0;
-    let position = 0;
-    while ((position = value.indexOf(needle, position)) !== -1) {
-      count += 1;
-      position += needle.length;
-    }
-    return count;
+  function escapeHtml(value) {
+    return value
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
   }
 
-  function replaceEditorText(editor, text) {
+  function selectEditorContents(editor) {
     editor.focus();
-
     const selection = window.getSelection();
     const range = document.createRange();
     range.selectNodeContents(editor);
     selection.removeAllRanges();
     selection.addRange(range);
+  }
+
+  async function replaceEditorText(editor, text) {
+    selectEditorContents(editor);
     document.execCommand("delete", false, null);
 
     const lines = text.replace(/\r\n?/g, "\n").split("\n");
     lines.forEach((line, index) => {
       if (line) document.execCommand("insertText", false, line);
-      if (index < lines.length - 1) document.execCommand("insertLineBreak", false, null);
+      if (index < lines.length - 1) document.execCommand("insertParagraph", false, null);
     });
 
-    const rendered = normalize(editor.innerText || editor.textContent);
-    const fingerprint = normalize(text).slice(0, 80);
-    if (!rendered || countOccurrences(rendered, fingerprint) !== 1) {
+    await sleep(250);
+    if (normalize(editor.innerText || editor.textContent) !== normalize(text)) {
+      selectEditorContents(editor);
+      document.execCommand("delete", false, null);
+      const html = lines.map(line => `<div>${line ? escapeHtml(line) : "<br>"}</div>`).join("");
+      document.execCommand("insertHTML", false, html);
+      await sleep(250);
+    }
+
+    if (normalize(editor.innerText || editor.textContent) !== normalize(text)) {
       throw new Error("Facebook did not accept the caption cleanly. The draft was stopped to prevent duplicate text.");
     }
   }
@@ -99,10 +107,15 @@
   }
 
   async function prepareComposer(caption, media) {
-    const composerTrigger = await waitFor(() => findByText('[role="button"], div[tabindex="0"]', [
-      "write something", "create a public post", "what's on your mind", "create post"
-    ]));
-    composerTrigger.click();
+    const openDialog = [...document.querySelectorAll('[role="dialog"]')].find(dialog =>
+      visible(dialog) && dialog.querySelector('[contenteditable="true"][role="textbox"]')
+    );
+    if (!openDialog) {
+      const composerTrigger = await waitFor(() => findByText('[role="button"], div[tabindex="0"]', [
+        "write something", "create a public post", "what's on your mind", "create post"
+      ]));
+      composerTrigger.click();
+    }
 
     const editor = await waitFor(() => {
       const modalEditors = [...document.querySelectorAll('[role="dialog"] [contenteditable="true"][role="textbox"]')]
@@ -112,9 +125,11 @@
     });
     const dialog = editor.closest('[role="dialog"]');
     if (!dialog) throw new Error("Facebook's active Create post dialog was not found.");
-    replaceEditorText(editor, caption);
+    await replaceEditorText(editor, caption);
 
     if (media?.bytes?.length) {
+      // Let Facebook finish any URL-card preview first so it cannot be mistaken for the selected file.
+      await sleep(1500);
       const input = await waitFor(() => [...dialog.querySelectorAll('input[type="file"]')].find(input =>
         (input.accept || "").includes("video") || (input.accept || "").includes("image") || input.multiple
       ), 15000);
@@ -145,8 +160,8 @@
       ok: true,
       prepared: true,
       message: media?.bytes?.length
-        ? "Caption and media are attached. Review them, then click Post this prepared draft."
-        : "Caption is ready. Review it, then click Post this prepared draft."
+        ? "Caption and media are verified. Publishing automatically."
+        : "Caption is verified. Publishing automatically."
     };
   }
 
