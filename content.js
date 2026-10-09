@@ -103,26 +103,26 @@
 
       const directUrl = groupUrl(group);
       if (directUrl && !location.href.startsWith(directUrl.replace(/\/$/, ""))) {
-        sendResponse({ ok: true, navigating: true, message: "Opening the saved group URL. Click Prepare again after it loads." });
+        sendResponse({ ok: true, navigating: true, message: "Opening the saved group URL…" });
         location.href = directUrl;
         return;
       }
 
       if (location.pathname.startsWith("/search/groups/")) {
-        sendResponse({ ok: true, navigating: true, message: `Opening ${group}. Click Prepare again after it loads.` });
+        sendResponse({ ok: true, navigating: true, message: `Opening ${group}…` });
         await openExactGroup(group);
         return;
       }
 
       if (!location.pathname.includes("/groups/")) {
-        sendResponse({ ok: true, navigating: true, message: `Opening ${group}. Click Prepare again after it loads.` });
+        sendResponse({ ok: true, navigating: true, message: `Searching for ${group}…` });
         location.href = `https://www.facebook.com/search/groups/?q=${encodeURIComponent(group)}`;
         return;
       }
 
       const heading = document.querySelector('h1, [role="main"] h2');
       if (!directUrl && heading && !normalize(heading.innerText).includes(normalize(group))) {
-        sendResponse({ ok: true, navigating: true, message: `Opening ${group}. Click Prepare again after it loads.` });
+        sendResponse({ ok: true, navigating: true, message: `Searching for ${group}…` });
         location.href = `https://www.facebook.com/search/groups/?q=${encodeURIComponent(group)}`;
         return;
       }

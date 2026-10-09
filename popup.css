@@ -9,7 +9,7 @@
   --muted: #aab3d4;
 }
 * { box-sizing: border-box; }
-body { margin: 0; width: 390px; background: radial-gradient(circle at 90% 5%, #221049 0, transparent 42%), var(--bg); color: var(--text); font: 14px/1.45 Inter, Segoe UI, sans-serif; }
+body { margin: 0; width: 390px; max-height: 600px; overflow-y: auto; background: radial-gradient(circle at 90% 5%, #221049 0, transparent 42%), var(--bg); color: var(--text); font: 14px/1.45 Inter, Segoe UI, sans-serif; }
 header { padding: 18px 20px 14px; border-bottom: 1px solid var(--line); text-align: center; }
 header img { width: 208px; max-height: 50px; object-fit: contain; }
 header p { margin: 7px 0 0; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; font-size: 11px; }
@@ -21,6 +21,9 @@ button { width: 100%; margin-top: 10px; border: 0; border-radius: 10px; padding:
 button.secondary { background: #151e42; color: var(--text); border: 1px solid var(--line); }
 button.ghost { background: transparent; color: var(--muted); }
 button:disabled { opacity: .5; cursor: wait; }
+.actions { position: sticky; bottom: 0; z-index: 5; margin: 12px -20px -18px; padding: 10px 20px 14px; border-top: 1px solid var(--line); background: rgba(5, 8, 23, .97); box-shadow: 0 -10px 24px rgba(0, 0, 0, .38); }
+.actions button { margin-top: 7px; }
+.actionRow { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .progress { display: flex; justify-content: space-between; gap: 12px; margin: 15px 0 2px; color: var(--cyan); font-size: 12px; }
 #groupName { max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; }
 #status { min-height: 40px; margin: 13px 0 0; padding: 10px; border: 1px solid var(--line); background: var(--panel); border-radius: 10px; color: var(--muted); }

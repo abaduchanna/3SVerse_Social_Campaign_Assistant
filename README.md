@@ -32,9 +32,11 @@ A local-first Chrome extension that helps prepare Facebook group posts from the 
 2. Paste one approved campaign caption.
 3. Choose its image or video.
 4. Click **Save campaign**.
-5. Click **Prepare next group**. If the assistant navigates to the group, wait for the page to load and click it again.
+5. Click **Start / prepare next group** once. The assistant automatically resumes through Facebook search and group-page navigation, including slower page loads.
 6. Click **Open Facebook review tab**, check the group rules and draft, then press Facebook's Post button yourself.
 7. Return to the extension for the next group.
+
+If the file chooser says **No file chosen**, the assistant deliberately prepares a text-only post. Select the reel again before starting the next group if you want media attached; Chrome does not allow an extension to retain a local file selection after its popup closes.
 
 Meta Business Suite remains the recommended scheduler for Facebook Page and Instagram posts. YouTube Studio remains the recommended scheduler for YouTube. Facebook does not provide a dependable public API for automatically posting to every group a personal account has joined.
 

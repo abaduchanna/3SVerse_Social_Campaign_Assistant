@@ -39,7 +39,9 @@ async function prepare() {
   if (!campaign.caption) throw new Error("Add the post text.");
 
   $("#prepare").disabled = true;
-  setStatus(`Preparing ${group}. Slow Facebook pages can take up to 30 seconds…`);
+  $("#prepare").textContent = "Preparing…";
+  const hasMedia = Boolean($("#media").files[0]);
+  setStatus(`Preparing ${group}${hasMedia ? " with media" : " as text-only"}. Slow Facebook pages can take up to 60 seconds…`);
   try {
     const response = await chrome.runtime.sendMessage({
       type: "PREPARE_POST",
@@ -54,9 +56,10 @@ async function prepare() {
       await chrome.storage.local.set({ campaign });
     }
     paint();
-    setStatus(response.message);
+    setStatus(`${response.message}${hasMedia ? "" : " This draft is text-only because no media file was selected."}`);
   } finally {
     $("#prepare").disabled = false;
+    $("#prepare").textContent = "Start / prepare next group";
   }
 }
 
@@ -71,6 +74,13 @@ $("#reset").addEventListener("click", async () => {
   await chrome.storage.local.set({ campaign });
   paint();
   setStatus("Progress reset. Nothing was deleted from Facebook.");
+});
+
+$("#media").addEventListener("change", () => {
+  const file = $("#media").files[0];
+  $("#mediaHint").textContent = file
+    ? `Selected: ${file.name} (${(file.size / 1024 / 1024).toFixed(1)} MB)`
+    : "Optional. Without a file, the assistant prepares a text-only post.";
 });
 
 chrome.storage.local.get("campaign").then(result => {

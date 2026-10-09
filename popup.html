@@ -21,18 +21,23 @@
 
     <label for="media">Image or video</label>
     <input id="media" type="file" accept="image/*,video/mp4,video/webm">
+    <small id="mediaHint">Optional. Without a file, the assistant prepares a text-only post.</small>
 
     <section class="progress">
       <span id="counter">0 of 0 prepared</span>
       <span id="groupName">No group selected</span>
     </section>
-    <button id="save" class="secondary">Save campaign</button>
-    <button id="prepare">Prepare next group</button>
-    <button id="openTab" class="secondary">Open Facebook review tab</button>
-    <button id="reset" class="ghost">Reset progress</button>
     <p id="status" role="status">Ready. The assistant never presses Facebook's final Post button.</p>
+    <section class="actions">
+      <button id="prepare">Start / prepare next group</button>
+      <button id="openTab" class="secondary">Open Facebook review tab</button>
+      <div class="actionRow">
+        <button id="save" class="secondary">Save</button>
+        <button id="reset" class="ghost">Reset</button>
+      </div>
+    </section>
   </main>
-  <footer>Local-first · Review before posting · 3sverse.com</footer>
+  <footer>v1.0.1 · Local-first · Review before posting · 3sverse.com</footer>
   <script src="popup.js"></script>
 </body>
 </html>

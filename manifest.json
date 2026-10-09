@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "3SVerse Social Campaign Assistant",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Prepare reviewed Facebook group posts from your existing Chrome session.",
   "permissions": ["storage", "tabs", "scripting"],
   "host_permissions": ["https://www.facebook.com/*", "https://m.facebook.com/*"],
