@@ -2,6 +2,7 @@ const $ = selector => document.querySelector(selector);
 const PLANNER_URL = "https://business.facebook.com/latest/content_calendar?business_id=4880742675547794&asset_id=1376773818846890";
 let queue = [];
 let stopped = false;
+const sourceForFile = new WeakMap();
 
 const WINDOWS_SEPARATOR = "\\";
 
@@ -16,6 +17,7 @@ function selectedFiles() {
   const seen = new Map();
   for (const input of [$("#captionFolder"), $("#reelFolder")]) {
     for (const file of input.files) {
+      sourceForFile.set(file, input.id);
       const key = `${file.webkitRelativePath || file.name}:${file.size}:${file.lastModified}`;
       seen.set(key, file);
     }
@@ -81,9 +83,14 @@ function renderQueue() {
 }
 
 async function filePayload(file) {
-  const base = $("#parentPath").value.trim().replace(/[\\/]+$/, "");
-  if (!base) throw new Error("Enter the parent folder path that contains the selected campaign folder(s).");
-  const relative = (file.webkitRelativePath || file.name).replace(/[\\/]+/g, WINDOWS_SEPARATOR);
+  const source = sourceForFile.get(file);
+  const pathInput = source === "reelFolder" ? $("#reelPath") : $("#captionPath");
+  const base = pathInput.value.trim().replace(/[\\/]+$/, "");
+  if (!base) throw new Error(`Enter the exact path for ${source === "reelFolder" ? "Campaign folder 2" : "Campaign folder 1"}.`);
+  let relative = (file.webkitRelativePath || file.name).replace(/[\\/]+/g, WINDOWS_SEPARATOR);
+  const baseLeaf = base.split(/[\\/]/).filter(Boolean).at(-1).toLowerCase();
+  const firstRelative = relative.split(WINDOWS_SEPARATOR)[0].toLowerCase();
+  if (firstRelative === baseLeaf) relative = relative.split(WINDOWS_SEPARATOR).slice(1).join(WINDOWS_SEPARATOR);
   return { name: file.name, type: file.type || "application/octet-stream", path: `${base}${WINDOWS_SEPARATOR}${relative}` };
 }
 
@@ -114,7 +121,9 @@ for (const selector of ["#captionFolder", "#reelFolder", "#startDay", "#startDat
   $(selector).addEventListener("change", rebuildQueue);
 }
 $("#customFirstDay").addEventListener("change", () => { $("#firstDayTime").disabled = !$("#customFirstDay").checked; });
-$("#parentPath").addEventListener("change", () => chrome.storage.local.set({ metaParentPath: $("#parentPath").value.trim() }));
+for (const id of ["captionPath", "reelPath"]) {
+  $("#" + id).addEventListener("change", () => chrome.storage.local.set({ ["meta" + id[0].toUpperCase() + id.slice(1)]: $("#" + id).value.trim() }));
+}
 $("#captionFolder").addEventListener("change", () => {
   const count = $("#captionFolder").files.length;
   $("#captionSummary").textContent = count ? `Folder 1 linked: ${count} files` : "No folder selected";
@@ -131,7 +140,8 @@ $("#start").addEventListener("click", () => start().catch(error => {
 }));
 $("#stop").addEventListener("click", () => { stopped = true; $("#stop").disabled = true; });
 $("#startDate").value = tomorrow();
-chrome.storage.local.get("metaParentPath").then(result => {
-  if (result.metaParentPath) $("#parentPath").value = result.metaParentPath;
+chrome.storage.local.get(["metaCaptionPath", "metaReelPath"]).then(result => {
+  if (result.metaCaptionPath) $("#captionPath").value = result.metaCaptionPath;
+  if (result.metaReelPath) $("#reelPath").value = result.metaReelPath;
 });
 renderQueue();

@@ -22,10 +22,13 @@
         <input id="reelFolder" type="file" webkitdirectory multiple>
       </label>
       <p id="reelSummary" class="hint">Use only when the campaign is split across two folders.</p>
-      <label>Parent folder path
-        <input id="parentPath" type="text" value="C:\Users\AbadUmairChanna\Downloads" spellcheck="false">
+      <label>Campaign folder 1 path
+        <input id="captionPath" type="text" value="C:\Users\AbadUmairChanna\Downloads\3SVerse_LinkedIn_Campaign_Oct_2026" spellcheck="false">
       </label>
-      <p class="hint">Used only to hand the selected local files to Meta's native uploader. Change it once if the campaign folders are stored elsewhere.</p>
+      <label>Campaign folder 2 path <span class="hint">(optional)</span>
+        <input id="reelPath" type="text" value="C:\Users\AbadUmairChanna\Downloads\3SVerse_30_Day_Social_Campaign_Bundle" spellcheck="false">
+      </label>
+      <p class="hint">These exact paths keep Meta uploads correct whether you select the whole campaign folder or its images/Reels subfolder.</p>
     </section>
 
     <section class="card grid">
@@ -58,7 +61,7 @@
       <p id="status" role="status">Ready.</p>
     </section>
   </main>
-  <footer>v1.1.1 · 3SVerse · Local-first · Native Meta upload + duplicate-safe resume</footer>
+  <footer>v1.1.2 · 3SVerse · Local-first · Exact folder paths + upload watchdog</footer>
   <script src="lib.js"></script>
   <script src="app.js"></script>
 </body>

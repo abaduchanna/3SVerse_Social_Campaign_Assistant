@@ -1,5 +1,13 @@
 const PLANNER_MATCH = "https://business.facebook.com/*";
 
+function withTimeout(promise, timeout, message) {
+  let timer;
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(message)), timeout); })
+  ]).finally(() => clearTimeout(timer));
+}
+
 chrome.action.onClicked.addListener(() => chrome.tabs.create({ url: chrome.runtime.getURL("app.html") }));
 
 async function workflowTab(url) {
@@ -81,14 +89,9 @@ async function uploadNativeFile(tabId, filePath) {
     await chrome.debugger.sendCommand(target, "Page.enable");
     await chrome.debugger.sendCommand(target, "DOM.enable");
     await chrome.debugger.sendCommand(target, "Page.setInterceptFileChooserDialog", { enabled: true });
-    const chooser = new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        chrome.debugger.onEvent.removeListener(listener);
-        reject(new Error("Meta's native upload chooser did not open."));
-      }, 30000);
+    const chooser = new Promise(resolve => {
       listener = (source, method, params) => {
         if (source.tabId !== tabId || method !== "Page.fileChooserOpened") return;
-        clearTimeout(timer);
         chrome.debugger.onEvent.removeListener(listener);
         resolve(params);
       };
@@ -96,15 +99,15 @@ async function uploadNativeFile(tabId, filePath) {
     });
     const clicked = await chrome.tabs.sendMessage(tabId, { type: "OPEN_META_UPLOAD" });
     if (!clicked?.ok) throw new Error(clicked?.error || "Meta's upload button was not found.");
-    const opened = await chooser;
-    await chrome.debugger.sendCommand(target, "DOM.setFileInputFiles", {
+    const opened = await withTimeout(chooser, 12000, "Meta's native upload chooser did not open within 12 seconds.");
+    await withTimeout(chrome.debugger.sendCommand(target, "DOM.setFileInputFiles", {
       files: [filePath],
       backendNodeId: opened.backendNodeId
-    });
-    await chrome.debugger.sendCommand(target, "Page.setInterceptFileChooserDialog", { enabled: false });
+    }), 15000, `Meta could not read the selected local file within 15 seconds. Check this exact path: ${filePath}`);
+    await withTimeout(chrome.debugger.sendCommand(target, "Page.setInterceptFileChooserDialog", { enabled: false }), 5000, "Meta upload cleanup timed out.");
   } finally {
     if (listener) try { chrome.debugger.onEvent.removeListener(listener); } catch (_) {}
-    if (attached) try { await chrome.debugger.detach(target); } catch (_) {}
+    if (attached) try { await withTimeout(chrome.debugger.detach(target), 5000, ""); } catch (_) {}
   }
 }
 
