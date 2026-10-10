@@ -73,13 +73,19 @@
   }
 
   function ensureFacebookAndInstagram() {
-    const root = modalRoot();
-    const postTo = [...root.querySelectorAll('[role="combobox"],button')].find(element =>
-      visible(element) && /post to/i.test(element.getAttribute("aria-label") || element.innerText || "")
-    );
-    if (!postTo) throw new Error("Meta 'Post to' account selector was not found.");
-    const value = norm(postTo.innerText || postTo.getAttribute("aria-label"));
-    if (!value.includes(" and ")) {
+    const heading = [...document.querySelectorAll('[role="heading"],h1,h2,h3,h4')]
+      .find(element => visible(element) && norm(element.innerText) === "post to");
+    if (!heading) throw new Error("Meta's visible 'Post to' section was not found.");
+
+    let selection = heading;
+    while (selection && selection !== document.body) {
+      const accounts = [...selection.querySelectorAll("img")]
+        .filter(visible)
+        .map(image => norm(image.alt));
+      if (accounts.includes("facebook") && accounts.includes("instagram")) break;
+      selection = selection.parentElement;
+    }
+    if (!selection || selection === document.body) {
       throw new Error("Facebook and Instagram are not both selected in Meta's 'Post to' control. Select both once, then retry.");
     }
   }
