@@ -22,6 +22,10 @@
         <input id="reelFolder" type="file" webkitdirectory multiple>
       </label>
       <p id="reelSummary" class="hint">Use only when the campaign is split across two folders.</p>
+      <label>Parent folder path
+        <input id="parentPath" type="text" value="C:\Users\AbadUmairChanna\Downloads" spellcheck="false">
+      </label>
+      <p class="hint">Used only to hand the selected local files to Meta's native uploader. Change it once if the campaign folders are stored elsewhere.</p>
     </section>
 
     <section class="card grid">
@@ -29,6 +33,8 @@
         <h2>2. Schedule</h2>
         <label>Start date <input id="startDate" type="date"></label>
         <label>Daily time <input id="time" type="time" value="09:00"></label>
+        <label class="check"><input id="customFirstDay" type="checkbox"> Use a different Day 1 time</label>
+        <label>Day 1 time <input id="firstDayTime" type="time" value="10:05" disabled></label>
         <p class="hint">Times use the computer's Central Time setting.</p>
       </div>
       <div>
@@ -51,7 +57,7 @@
       <p id="status" role="status">Ready.</p>
     </section>
   </main>
-  <footer>v1.0.3 · 3SVerse · Local-first · Nothing is uploaded until you start scheduling</footer>
+  <footer>v1.1.0 · 3SVerse · Local-first · Native Meta upload + saved schedule workflow</footer>
   <script src="lib.js"></script>
   <script src="app.js"></script>
 </body>

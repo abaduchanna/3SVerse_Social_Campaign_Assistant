@@ -1,9 +1,10 @@
 # 3SVerse Social Campaign Assistant
 
-This repository now contains two local-first Chrome extensions:
+This repository now contains three local-first Chrome extensions:
 
 - The root extension posts a campaign sequentially to Facebook groups joined by the signed-in account.
 - [`meta-planner-scheduler/`](meta-planner-scheduler/) imports one or two local campaign folders and schedules Facebook + Instagram Reels, image posts, and Stories through Meta Business Suite Planner.
+- [`facebook-live-group-poster/`](facebook-live-group-poster/) imports Facebook **Your groups**, lets the operator save an exact checkbox selection, and posts one Facebook Live link with text and hashtags only to those saved destinations.
 
 A local-first Chrome extension that imports every group joined by the Facebook account in your existing Chrome profile and posts a campaign to them sequentially.
 

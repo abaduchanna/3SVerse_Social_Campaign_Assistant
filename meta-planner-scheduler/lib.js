@@ -31,21 +31,22 @@
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
   }
 
-  function buildQueue(captions, mediaFiles, imageFiles, startDate, time, selectedTypes) {
+  function buildQueue(captions, mediaFiles, imageFiles, startDate, time, selectedTypes, firstDayTime = "") {
     const mediaByDay = new Map(mediaFiles.map(file => [dayNumber(file.name), file]).filter(([day]) => day));
     const imageByDay = new Map(imageFiles.map(file => [dayNumber(file.name), file]).filter(([day]) => day));
     const queue = [];
     for (const entry of captions) {
       const date = addDays(startDate, entry.day - 1);
+      const itemTime = entry.day === 1 && firstDayTime ? firstDayTime : time;
       if (selectedTypes.reel && mediaByDay.has(entry.day)) {
-        queue.push({ ...entry, type: "reel", file: mediaByDay.get(entry.day), date, time });
+        queue.push({ ...entry, type: "reel", file: mediaByDay.get(entry.day), date, time: itemTime });
       }
       if (selectedTypes.post && imageByDay.has(entry.day)) {
-        queue.push({ ...entry, type: "post", file: imageByDay.get(entry.day), date, time });
+        queue.push({ ...entry, type: "post", file: imageByDay.get(entry.day), date, time: itemTime });
       }
       if (selectedTypes.story) {
         const file = imageByDay.get(entry.day) || mediaByDay.get(entry.day);
-        if (file) queue.push({ ...entry, type: "story", file, date, time });
+        if (file) queue.push({ ...entry, type: "story", file, date, time: itemTime });
       }
     }
     return queue;

@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>3SVerse Facebook Live Group Poster</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <img src="brand/3SVerse_Logo_Vector_1200x300.png" alt="3SVerse">
+    <p>Facebook Live Group Poster</p>
+  </header>
+  <main>
+    <label for="liveLink">Facebook Live link</label>
+    <input id="liveLink" type="url" placeholder="https://www.facebook.com/...">
+
+    <label for="postText">Post text</label>
+    <textarea id="postText" rows="5" placeholder="Write the message above the live link"></textarea>
+
+    <label for="hashtags">Hashtags</label>
+    <textarea id="hashtags" rows="3" placeholder="#3SVerse #VidaPay"></textarea>
+
+    <section class="groupCard">
+      <div class="row"><strong>Joined groups</strong><span id="selectedCount">0 selected</span></div>
+      <button id="importGroups" class="secondary">Import / refresh Your groups</button>
+      <input id="groupSearch" type="search" placeholder="Filter groups">
+      <label class="selectAll"><input id="selectAll" type="checkbox"> Select all visible</label>
+      <div id="groupList" class="groupList"><p class="hint">Import joined groups once, then choose and save the destinations.</p></div>
+      <button id="saveSelection" class="secondary">Save group selection</button>
+    </section>
+
+    <section class="progress"><span id="counter">0 of 0 posted</span><span id="currentGroup">Ready</span></section>
+    <p id="status" role="status">Add the live link, text and hashtags.</p>
+    <button id="start">Start selected-groups campaign</button>
+    <button id="stop" class="danger" disabled>Stop campaign</button>
+    <button id="openTab" class="secondary">Open Facebook campaign tab</button>
+  </main>
+  <footer>v1.0.0 · Exact saved group URLs · 3sverse.com</footer>
+  <script src="popup.js"></script>
+</body>
+</html>

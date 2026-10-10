@@ -3,6 +3,8 @@ const PLANNER_URL = "https://business.facebook.com/latest/content_calendar?busin
 let queue = [];
 let stopped = false;
 
+const WINDOWS_SEPARATOR = "\\";
+
 function tomorrow() {
   const date = new Date();
   date.setDate(date.getDate() + 1);
@@ -55,7 +57,8 @@ async function rebuildQueue() {
     const captions = MetaSchedulerLib.parseLinkedInCampaign(markdown);
     const media = files.filter(file => /^video\//.test(file.type) || /\.(mp4|webm|mov)$/i.test(file.name));
     const images = files.filter(file => /^image\//.test(file.type) || /\.(png|jpe?g|webp)$/i.test(file.name));
-    queue = MetaSchedulerLib.buildQueue(captions, media, images, $("#startDate").value, $("#time").value, settings());
+    const firstDayTime = $("#customFirstDay").checked ? $("#firstDayTime").value : "";
+    queue = MetaSchedulerLib.buildQueue(captions, media, images, $("#startDate").value, $("#time").value, settings(), firstDayTime);
     renderQueue();
     setStatus(`Matched ${captions.length} captions, ${media.length} videos and ${images.length} images. Queue: ${queue.length}.`);
   } catch (error) {
@@ -77,7 +80,10 @@ function renderQueue() {
 }
 
 async function filePayload(file) {
-  return { name: file.name, type: file.type || "application/octet-stream", bytes: [...new Uint8Array(await file.arrayBuffer())] };
+  const base = $("#parentPath").value.trim().replace(/[\\/]+$/, "");
+  if (!base) throw new Error("Enter the parent folder path that contains the selected campaign folder(s).");
+  const relative = (file.webkitRelativePath || file.name).replace(/[\\/]+/g, WINDOWS_SEPARATOR);
+  return { name: file.name, type: file.type || "application/octet-stream", path: `${base}${WINDOWS_SEPARATOR}${relative}` };
 }
 
 async function start() {
@@ -103,9 +109,11 @@ async function start() {
   $("#stop").disabled = true;
 }
 
-for (const selector of ["#captionFolder", "#reelFolder", "#startDate", "#time", "#reelType", "#postType", "#storyType"]) {
+for (const selector of ["#captionFolder", "#reelFolder", "#startDate", "#time", "#firstDayTime", "#customFirstDay", "#reelType", "#postType", "#storyType"]) {
   $(selector).addEventListener("change", rebuildQueue);
 }
+$("#customFirstDay").addEventListener("change", () => { $("#firstDayTime").disabled = !$("#customFirstDay").checked; });
+$("#parentPath").addEventListener("change", () => chrome.storage.local.set({ metaParentPath: $("#parentPath").value.trim() }));
 $("#captionFolder").addEventListener("change", () => {
   const count = $("#captionFolder").files.length;
   $("#captionSummary").textContent = count ? `Folder 1 linked: ${count} files` : "No folder selected";
@@ -122,4 +130,7 @@ $("#start").addEventListener("click", () => start().catch(error => {
 }));
 $("#stop").addEventListener("click", () => { stopped = true; $("#stop").disabled = true; });
 $("#startDate").value = tomorrow();
+chrome.storage.local.get("metaParentPath").then(result => {
+  if (result.metaParentPath) $("#parentPath").value = result.metaParentPath;
+});
 renderQueue();

@@ -10,6 +10,9 @@ This Chrome extension is the Meta Business Suite companion inside the 3SVerse So
 - Default start is tomorrow at 9:00 AM in the computer's Central Time setting.
 - Reels are enabled by default. Image posts and Stories are optional.
 - It uses the detected 3SVerse Meta Planner URL and requires Meta's **Post to** selector to contain both Facebook and Instagram before continuing.
+- v1.1.0 uses Meta's real native upload chooser through Chrome's debugger bridge instead of waiting for a file input that Meta removes from the DOM. The parent path is saved once; linked folder selections continue to supply all filenames.
+- Facebook and Instagram receive separate verified date and time fields. A different Day 1 time is optional; every later day uses the daily time.
+- Reel sharing to the connected Facebook Story is enabled before scheduling when Meta exposes that option. Campaign hashtags remain part of the verified caption.
 - Reels open directly in Meta's dedicated Reel Composer and are considered ready only after the upload, caption, Cancel, and Next controls are present. This avoids false timeouts when Meta changes Planner's intermediate menu page.
 - The current Meta account picker exposes its `combobox` semantics only through the accessibility tree, not through a literal DOM `role` attribute. The scheduler therefore anchors on the visible **Post to** heading and verifies Facebook + Instagram icons inside its smallest containing section.
 - Each item stops on the first missing control, lost caption, upload error, or missing scheduling confirmation.
@@ -26,7 +29,7 @@ This Chrome extension is the Meta Business Suite companion inside the 3SVerse So
 
 1. Select one campaign folder. Select folder 2 only if the assets are split.
 2. Check the queue count and dates.
-3. Leave **Facebook + Instagram Reels** selected for the current 30 MP4 campaign.
+3. Confirm the saved parent folder path. Leave **Facebook + Instagram Reels** selected, and enable image posts/Stories when required.
 4. Click **Schedule complete queue** once.
 5. Keep Chrome open. A dedicated, unfocused Meta Planner tab is used for the run.
 

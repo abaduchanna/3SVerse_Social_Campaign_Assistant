@@ -46,4 +46,7 @@ assert.deepEqual(queue.map(item => `${item.day}:${item.type}:${item.date}`), [
   "1:reel:2026-10-10", "1:post:2026-10-10", "2:reel:2026-10-11"
 ]);
 
+const customFirstDay = buildQueue(entries, [file("3SVerse-Reel-01.mp4"), file("3SVerse-Reel-02.mp4")], [], "2026-10-10", "09:00", { reel: true, post: false, story: false }, "10:05");
+assert.deepEqual(customFirstDay.map(item => item.time), ["10:05", "09:00"]);
+
 process.stdout.write("meta scheduler library test passed\n");
