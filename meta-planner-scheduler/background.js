@@ -88,6 +88,7 @@ async function uploadNativeFile(tabId, filePath) {
     attached = true;
     await chrome.debugger.sendCommand(target, "Page.enable");
     await chrome.debugger.sendCommand(target, "DOM.enable");
+    await chrome.debugger.sendCommand(target, "Runtime.enable");
     await chrome.debugger.sendCommand(target, "Page.setInterceptFileChooserDialog", { enabled: true });
     const chooser = new Promise(resolve => {
       listener = (source, method, params) => {
@@ -97,12 +98,42 @@ async function uploadNativeFile(tabId, filePath) {
       };
       chrome.debugger.onEvent.addListener(listener);
     });
-    const clicked = await chrome.tabs.sendMessage(tabId, { type: "OPEN_META_UPLOAD" });
-    if (!clicked?.ok) throw new Error(clicked?.error || "Meta's upload button was not found.");
-    const opened = await withTimeout(chooser, 12000, "Meta's native upload chooser did not open within 12 seconds.");
+    const located = await chrome.debugger.sendCommand(target, "Runtime.evaluate", {
+      expression: `(() => {
+        const norm = value => String(value || "").normalize("NFKC").replace(/\\s+/g, " ").trim().toLowerCase();
+        const visible = element => Boolean(element && element.getClientRects().length && getComputedStyle(element).visibility !== "hidden");
+        const button = [...document.querySelectorAll('button,[role="button"],label')]
+          .filter(visible)
+          .find(element => /^(add|upload) (video|photo|photos|media|photos\\/videos)$/.test(norm(element.innerText || element.getAttribute("aria-label"))));
+        if (!button) return null;
+        const rect = button.getBoundingClientRect();
+        return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, label: (button.innerText || button.getAttribute("aria-label") || "").trim() };
+      })()`,
+      returnByValue: true
+    });
+    const point = located?.result?.value;
+    if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) {
+      throw new Error("Meta's visible upload button was not found.");
+    }
+    await chrome.debugger.sendCommand(target, "Input.dispatchMouseEvent", { type: "mouseMoved", x: point.x, y: point.y });
+    await chrome.debugger.sendCommand(target, "Input.dispatchMouseEvent", { type: "mousePressed", x: point.x, y: point.y, button: "left", clickCount: 1 });
+    await chrome.debugger.sendCommand(target, "Input.dispatchMouseEvent", { type: "mouseReleased", x: point.x, y: point.y, button: "left", clickCount: 1 });
+    let opened;
+    try {
+      opened = await withTimeout(chooser, 12000, "");
+    } catch (_) {
+      const document = await chrome.debugger.sendCommand(target, "DOM.getDocument", { depth: -1, pierce: true });
+      const inputs = await chrome.debugger.sendCommand(target, "DOM.querySelectorAll", {
+        nodeId: document.root.nodeId,
+        selector: 'input[type="file"]'
+      });
+      const nodeId = inputs?.nodeIds?.at(-1);
+      if (!nodeId) throw new Error(`Meta ignored the trusted click on '${point.label}' and exposed no file input.`);
+      opened = { nodeId };
+    }
     await withTimeout(chrome.debugger.sendCommand(target, "DOM.setFileInputFiles", {
       files: [filePath],
-      backendNodeId: opened.backendNodeId
+      ...(opened.backendNodeId ? { backendNodeId: opened.backendNodeId } : { nodeId: opened.nodeId })
     }), 15000, `Meta could not read the selected local file within 15 seconds. Check this exact path: ${filePath}`);
     await withTimeout(chrome.debugger.sendCommand(target, "Page.setInterceptFileChooserDialog", { enabled: false }), 5000, "Meta upload cleanup timed out.");
   } finally {
