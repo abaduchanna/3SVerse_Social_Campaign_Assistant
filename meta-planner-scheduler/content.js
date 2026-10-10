@@ -188,18 +188,6 @@
     ).at(-1);
   }
 
-  async function reachShareStep() {
-    for (let step = 0; step < 3; step += 1) {
-      if (exactControl("Schedule") || /scheduling options|publish now/i.test(modalRoot().innerText)) return;
-      const next = await waitFor(() => enabledExactButton("Next"), 120000, 700);
-      next.click();
-      await sleep(1200);
-    }
-    if (!(exactControl("Schedule") || /scheduling options|publish now/i.test(modalRoot().innerText))) {
-      throw new Error("Meta did not reach the Share/Scheduling step.");
-    }
-  }
-
   function setNativeValue(input, value) {
     const prototype = Object.getPrototypeOf(input);
     const setter = Object.getOwnPropertyDescriptor(prototype, "value")?.set;
@@ -214,12 +202,34 @@
       .find(element => visible(element) && /share to facebook story/i.test(element.getAttribute("aria-label") || ""));
   }
 
-  async function openSchedule() {
+  function scheduleChoice() {
+    return [...document.querySelectorAll('[role="radio"],[role="checkbox"],input[type="radio"],input[type="checkbox"]')]
+      .find(element => {
+        if (!visible(element)) return false;
+        const label = element.id ? document.querySelector(`label[for="${CSS.escape(element.id)}"]`) : element.closest("label");
+        return norm(element.innerText || element.getAttribute("aria-label") || label?.innerText) === "schedule";
+      });
+  }
+
+  function checked(element) {
+    return Boolean(element && (element.checked || element.getAttribute("aria-checked") === "true"));
+  }
+
+  function flowState(item) {
+    const rootText = norm(modalRoot().innerText);
     const story = storyShareSwitch();
-    if (story && story.getAttribute("aria-checked") !== "true" && !story.checked) story.click();
-    const scheduleOption = await waitFor(() => exactControl("Schedule") || [...document.querySelectorAll('[role="radio"]')].find(element => visible(element) && norm(element.innerText) === "schedule"));
-    scheduleOption.click();
-    await waitFor(() => document.querySelectorAll("input[placeholder='dd/mm/yyyy']").length >= 2, 15000, 250, "Facebook and Instagram date fields");
+    const schedule = scheduleChoice();
+    return {
+      captionRetained: item.type === "story" || composerText().includes(norm(item.caption)),
+      nextReady: Boolean(enabledExactButton("Next")),
+      shareStep: /scheduling options/.test(rootText),
+      scheduleSelected: checked(schedule) || document.querySelectorAll("input[placeholder='dd/mm/yyyy']").length >= 2,
+      storyAvailable: Boolean(story),
+      storyOn: checked(story),
+      fieldsReady: document.querySelectorAll("input[placeholder='dd/mm/yyyy']").length >= 2,
+      finalReady: Boolean(enabledExactButton("Schedule")),
+      summary: screenSummary()
+    };
   }
 
   function scheduleMatches(date, time) {
@@ -233,12 +243,6 @@
     const timeOk = hourInputs.every(input => Number(input.getAttribute("aria-valuenow")) === hours)
       && minuteInputs.every(input => Number(input.getAttribute("aria-valuenow")) === minutes);
     return dateOk && timeOk;
-  }
-
-  async function submitSchedule(date, time) {
-    await waitFor(() => scheduleMatches(date, time), 15000, 250, "the requested Facebook and Instagram date/time");
-    const finalButton = await waitFor(() => enabledExactButton("Schedule"), 15000);
-    finalButton.click();
   }
 
   async function verifyScheduled() {
@@ -278,22 +282,32 @@
       })().catch(error => sendResponse({ ok: false, error: error.message }));
       return true;
     }
-    if (message.type === "OPEN_META_SCHEDULE") {
+    if (message.type === "GET_META_FLOW_STATE") {
       (async () => {
         if (!active) throw new Error("Meta scheduling state was lost. Retry this item.");
-        if (active.captionReady && !composerText().includes(norm(message.item.caption))) {
-          throw new Error("Meta did not retain the complete caption and hashtags.");
-        }
-        await reachShareStep();
-        await openSchedule();
+        sendResponse({ ok: true, state: flowState(active.item) });
+      })().catch(error => sendResponse({ ok: false, error: error.message }));
+      return true;
+    }
+    if (message.type === "WAIT_META_SCHEDULE_FIELDS") {
+      (async () => {
+        await waitFor(() => document.querySelectorAll("input[placeholder='dd/mm/yyyy']").length >= 2, 15000, 250, "Facebook and Instagram date fields");
         sendResponse({ ok: true, scheduleReady: true });
       })().catch(error => sendResponse({ ok: false, error: error.message }));
       return true;
     }
-    if (message.type === "SUBMIT_META_ITEM") {
+    if (message.type === "PREFLIGHT_META_ITEM") {
       (async () => {
         if (!active) throw new Error("Meta scheduling state was lost. Retry this item.");
-        await submitSchedule(message.item.date, message.item.time);
+        await waitFor(() => scheduleMatches(message.item.date, message.item.time), 15000, 250, "the requested Facebook and Instagram date/time");
+        await waitFor(() => enabledExactButton("Schedule"), 15000, 250, "the final Schedule button");
+        sendResponse({ ok: true, ready: true });
+      })().catch(error => sendResponse({ ok: false, error: error.message }));
+      return true;
+    }
+    if (message.type === "VERIFY_META_ITEM") {
+      (async () => {
+        if (!active) throw new Error("Meta scheduling state was lost. Retry this item.");
         await verifyScheduled();
         active = null;
         sendResponse({ ok: true, scheduled: true });

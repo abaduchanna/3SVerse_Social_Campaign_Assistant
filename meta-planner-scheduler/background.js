@@ -78,6 +78,86 @@ async function trustedInsert(tabId, text) {
   }
 }
 
+async function trustedClick(tabId, request) {
+  const target = { tabId };
+  let attached = false;
+  try {
+    await chrome.debugger.attach(target, "1.3");
+    attached = true;
+    await chrome.debugger.sendCommand(target, "Runtime.enable");
+    const expression = `(() => {
+      const request = ${JSON.stringify(request)};
+      const norm = value => String(value || "").normalize("NFKC").replace(/\\s+/g, " ").trim().toLowerCase();
+      const visible = element => Boolean(element && element.getClientRects().length && getComputedStyle(element).visibility !== "hidden");
+      const enabled = element => !element.matches(":disabled,[aria-disabled='true']");
+      const textFor = element => {
+        const direct = element.innerText || element.getAttribute("aria-label") || "";
+        if (direct) return direct;
+        if (element.id) {
+          const label = document.querySelector('label[for="' + CSS.escape(element.id) + '"]');
+          if (label) return label.innerText || label.getAttribute("aria-label") || "";
+        }
+        return element.closest("label")?.innerText || "";
+      };
+      const labels = request.labels.map(norm);
+      let matches = [...document.querySelectorAll('button,[role="button"],[role="checkbox"],[role="radio"],input[type="checkbox"],input[type="radio"],label')]
+        .filter(visible)
+        .filter(enabled)
+        .filter(element => labels.includes(norm(textFor(element))));
+      if (request.requireChecked === true) matches = matches.filter(element => element.checked || element.getAttribute("aria-checked") === "true");
+      if (request.requireChecked === false) matches = matches.filter(element => !(element.checked || element.getAttribute("aria-checked") === "true"));
+      const element = request.preferLast ? matches.at(-1) : matches[0];
+      if (!element) return null;
+      const rect = element.getBoundingClientRect();
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, label: textFor(element).trim() };
+    })()`;
+    const located = await chrome.debugger.sendCommand(target, "Runtime.evaluate", { expression, returnByValue: true });
+    const point = located?.result?.value;
+    if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) {
+      throw new Error(`Meta control was not found: ${request.labels.join(" / ")}`);
+    }
+    await chrome.debugger.sendCommand(target, "Input.dispatchMouseEvent", { type: "mouseMoved", x: point.x, y: point.y });
+    await chrome.debugger.sendCommand(target, "Input.dispatchMouseEvent", { type: "mousePressed", x: point.x, y: point.y, button: "left", clickCount: 1 });
+    await chrome.debugger.sendCommand(target, "Input.dispatchMouseEvent", { type: "mouseReleased", x: point.x, y: point.y, button: "left", clickCount: 1 });
+    return point.label;
+  } finally {
+    if (attached) try { await chrome.debugger.detach(target); } catch (_) {}
+  }
+}
+
+async function readFlowState(tabId) {
+  const response = await chrome.tabs.sendMessage(tabId, { type: "GET_META_FLOW_STATE" });
+  if (!response?.ok) throw new Error(response?.error || "Meta flow state could not be read.");
+  return response.state;
+}
+
+async function reachTrustedScheduleStep(tabId, item) {
+  const initial = await readFlowState(tabId);
+  if (!initial.captionRetained && item.type !== "story") {
+    throw new Error("Meta did not retain the complete caption and hashtags.");
+  }
+  for (let step = 0; step < 4; step += 1) {
+    const state = await readFlowState(tabId);
+    if (state.shareStep) break;
+    if (!state.nextReady) throw new Error(`Meta did not enable Next; ${state.summary}`);
+    await trustedClick(tabId, { labels: ["Next"], preferLast: true });
+    await new Promise(resolve => setTimeout(resolve, 1200));
+  }
+  let state = await readFlowState(tabId);
+  if (!state.shareStep) throw new Error(`Meta did not reach the Share/Scheduling step; ${state.summary}`);
+  if (state.storyAvailable && !state.storyOn) {
+    await trustedClick(tabId, { labels: ["Share to Facebook story"], requireChecked: false });
+    await new Promise(resolve => setTimeout(resolve, 500));
+  }
+  state = await readFlowState(tabId);
+  if (!state.scheduleSelected) {
+    await trustedClick(tabId, { labels: ["Schedule"], requireChecked: false });
+    await new Promise(resolve => setTimeout(resolve, 800));
+  }
+  const ready = await chrome.tabs.sendMessage(tabId, { type: "WAIT_META_SCHEDULE_FIELDS" });
+  if (!ready?.ok || !ready.scheduleReady) throw new Error(ready?.error || "Meta schedule controls were not ready.");
+}
+
 async function uploadNativeFile(tabId, filePath) {
   if (!filePath) throw new Error("The selected file has no local path. Check the Parent folder path in the scheduler.");
   const target = { tabId };
@@ -228,10 +308,12 @@ async function scheduleItem(message) {
   }
   if (!prepared) throw lastUploadError || new Error("Meta upload did not prepare the item.");
   if (prepared.captionReady) await trustedInsert(tab.id, message.item.caption);
-  const scheduling = await chrome.tabs.sendMessage(tab.id, { type: "OPEN_META_SCHEDULE", item: message.item });
-  if (!scheduling?.ok || !scheduling.scheduleReady) throw new Error(scheduling?.error || "Meta schedule controls were not ready.");
+  await reachTrustedScheduleStep(tab.id, message.item);
   await trustedScheduleInput(tab.id, message.item.date, message.item.time);
-  const finished = await chrome.tabs.sendMessage(tab.id, { type: "SUBMIT_META_ITEM", item: message.item });
+  const preflight = await chrome.tabs.sendMessage(tab.id, { type: "PREFLIGHT_META_ITEM", item: message.item });
+  if (!preflight?.ok || !preflight.ready) throw new Error(preflight?.error || "Meta schedule preflight failed.");
+  await trustedClick(tab.id, { labels: ["Schedule"], preferLast: true });
+  const finished = await chrome.tabs.sendMessage(tab.id, { type: "VERIFY_META_ITEM", item: message.item });
   if (!finished?.ok || !finished.scheduled) throw new Error(finished?.error || "Meta did not confirm the scheduled item.");
   return finished;
 }
