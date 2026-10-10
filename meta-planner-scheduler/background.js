@@ -148,17 +148,17 @@ async function trustedScheduleInput(tabId, date, time) {
   const target = { tabId };
   let attached = false;
   const entries = [
-    ["input[placeholder='dd/mm/yyyy']", 0, `${day}/${month}/${year}`],
-    ["input[placeholder='dd/mm/yyyy']", 1, `${day}/${month}/${year}`],
-    ["input[role='spinbutton'][aria-label='hours']", 0, hours],
-    ["input[role='spinbutton'][aria-label='hours']", 1, hours],
-    ["input[role='spinbutton'][aria-label='minutes']", 0, minutes],
-    ["input[role='spinbutton'][aria-label='minutes']", 1, minutes]
+    ["input[placeholder='dd/mm/yyyy']", 0, `${day}/${month}/${year}`, "insert"],
+    ["input[placeholder='dd/mm/yyyy']", 1, `${day}/${month}/${year}`, "insert"],
+    ["input[role='spinbutton'][aria-label='hours']", 0, hours, "keys"],
+    ["input[role='spinbutton'][aria-label='hours']", 1, hours, "keys"],
+    ["input[role='spinbutton'][aria-label='minutes']", 0, minutes, "keys"],
+    ["input[role='spinbutton'][aria-label='minutes']", 1, minutes, "keys"]
   ];
   try {
     await chrome.debugger.attach(target, "1.3");
     attached = true;
-    for (const [selector, index, value] of entries) {
+    for (const [selector, index, value, mode] of entries) {
       const expression = `(() => { const e = [...document.querySelectorAll(${JSON.stringify(selector)})].filter(x => x.getClientRects().length)[${index}]; if (!e) return false; e.focus(); e.select(); return true; })()`;
       const focused = await chrome.debugger.sendCommand(target, "Runtime.evaluate", { expression, returnByValue: true });
       if (!focused?.result?.value) throw new Error("Meta's Facebook and Instagram schedule fields were not all available.");
@@ -170,7 +170,22 @@ async function trustedScheduleInput(tabId, date, time) {
         type: "keyUp", key: "a", code: "KeyA", modifiers: 2,
         windowsVirtualKeyCode: 65, nativeVirtualKeyCode: 65
       });
-      await chrome.debugger.sendCommand(target, "Input.insertText", { text: value });
+      if (mode === "insert") {
+        await chrome.debugger.sendCommand(target, "Input.insertText", { text: value });
+      } else {
+        for (const character of String(value)) {
+          const virtualKey = character.charCodeAt(0);
+          await chrome.debugger.sendCommand(target, "Input.dispatchKeyEvent", {
+            type: "keyDown", key: character, code: `Digit${character}`,
+            text: character, unmodifiedText: character,
+            windowsVirtualKeyCode: virtualKey, nativeVirtualKeyCode: virtualKey
+          });
+          await chrome.debugger.sendCommand(target, "Input.dispatchKeyEvent", {
+            type: "keyUp", key: character, code: `Digit${character}`,
+            windowsVirtualKeyCode: virtualKey, nativeVirtualKeyCode: virtualKey
+          });
+        }
+      }
       await chrome.debugger.sendCommand(target, "Input.dispatchKeyEvent", {
         type: "keyDown", key: "Tab", code: "Tab", windowsVirtualKeyCode: 9, nativeVirtualKeyCode: 9
       });

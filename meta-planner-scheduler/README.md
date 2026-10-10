@@ -14,6 +14,7 @@ This Chrome extension is the Meta Business Suite companion inside the 3SVerse So
 - v1.1.1 adds **Start from campaign day** so a verified/manual item can be skipped without duplicating it; dates still remain anchored to the campaign's Day 1 start date.
 - v1.1.2 replaces the ambiguous single parent path with exact Folder 1 / Folder 2 paths, strips a duplicated selected root segment, and adds hard timeouts around chooser interception and native file assignment so Chrome's debugger is always detached on failure.
 - v1.1.3 replaces the synthetic upload-button click with a trusted Chrome DevTools mouse click and falls back to a directly exposed file input when Meta does not emit its chooser event.
+- v1.1.4 enters Meta's custom hour/minute spinbuttons with trusted digit key events (their HTML value is intentionally blank) and verifies the real `aria-valuenow` values before the final Schedule click.
 - Facebook and Instagram receive separate verified date and time fields. A different Day 1 time is optional; every later day uses the daily time.
 - Reel sharing to the connected Facebook Story is enabled before scheduling when Meta exposes that option. Campaign hashtags remain part of the verified caption.
 - Reels open directly in Meta's dedicated Reel Composer and are considered ready only after the upload, caption, Cancel, and Next controls are present. This avoids false timeouts when Meta changes Planner's intermediate menu page.
