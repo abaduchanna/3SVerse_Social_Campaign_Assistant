@@ -58,7 +58,8 @@ async function rebuildQueue() {
     const media = files.filter(file => /^video\//.test(file.type) || /\.(mp4|webm|mov)$/i.test(file.name));
     const images = files.filter(file => /^image\//.test(file.type) || /\.(png|jpe?g|webp)$/i.test(file.name));
     const firstDayTime = $("#customFirstDay").checked ? $("#firstDayTime").value : "";
-    queue = MetaSchedulerLib.buildQueue(captions, media, images, $("#startDate").value, $("#time").value, settings(), firstDayTime);
+    const startDay = Math.max(1, Number($("#startDay").value) || 1);
+    queue = MetaSchedulerLib.buildQueue(captions, media, images, $("#startDate").value, $("#time").value, settings(), firstDayTime, startDay);
     renderQueue();
     setStatus(`Matched ${captions.length} captions, ${media.length} videos and ${images.length} images. Queue: ${queue.length}.`);
   } catch (error) {
@@ -109,7 +110,7 @@ async function start() {
   $("#stop").disabled = true;
 }
 
-for (const selector of ["#captionFolder", "#reelFolder", "#startDate", "#time", "#firstDayTime", "#customFirstDay", "#reelType", "#postType", "#storyType"]) {
+for (const selector of ["#captionFolder", "#reelFolder", "#startDay", "#startDate", "#time", "#firstDayTime", "#customFirstDay", "#reelType", "#postType", "#storyType"]) {
   $(selector).addEventListener("change", rebuildQueue);
 }
 $("#customFirstDay").addEventListener("change", () => { $("#firstDayTime").disabled = !$("#customFirstDay").checked; });

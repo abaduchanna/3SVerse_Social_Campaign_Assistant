@@ -49,4 +49,7 @@ assert.deepEqual(queue.map(item => `${item.day}:${item.type}:${item.date}`), [
 const customFirstDay = buildQueue(entries, [file("3SVerse-Reel-01.mp4"), file("3SVerse-Reel-02.mp4")], [], "2026-10-10", "09:00", { reel: true, post: false, story: false }, "10:05");
 assert.deepEqual(customFirstDay.map(item => item.time), ["10:05", "09:00"]);
 
+const resumed = buildQueue(entries, [file("3SVerse-Reel-01.mp4"), file("3SVerse-Reel-02.mp4")], [], "2026-10-10", "09:00", { reel: true, post: false, story: false }, "10:05", 2);
+assert.deepEqual(resumed.map(item => `${item.day}:${item.date}:${item.time}`), ["2:2026-10-11:09:00"]);
+
 process.stdout.write("meta scheduler library test passed\n");

@@ -31,11 +31,12 @@
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
   }
 
-  function buildQueue(captions, mediaFiles, imageFiles, startDate, time, selectedTypes, firstDayTime = "") {
+  function buildQueue(captions, mediaFiles, imageFiles, startDate, time, selectedTypes, firstDayTime = "", startAtDay = 1) {
     const mediaByDay = new Map(mediaFiles.map(file => [dayNumber(file.name), file]).filter(([day]) => day));
     const imageByDay = new Map(imageFiles.map(file => [dayNumber(file.name), file]).filter(([day]) => day));
     const queue = [];
     for (const entry of captions) {
+      if (entry.day < startAtDay) continue;
       const date = addDays(startDate, entry.day - 1);
       const itemTime = entry.day === 1 && firstDayTime ? firstDayTime : time;
       if (selectedTypes.reel && mediaByDay.has(entry.day)) {

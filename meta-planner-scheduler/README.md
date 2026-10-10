@@ -11,6 +11,7 @@ This Chrome extension is the Meta Business Suite companion inside the 3SVerse So
 - Reels are enabled by default. Image posts and Stories are optional.
 - It uses the detected 3SVerse Meta Planner URL and requires Meta's **Post to** selector to contain both Facebook and Instagram before continuing.
 - v1.1.0 uses Meta's real native upload chooser through Chrome's debugger bridge instead of waiting for a file input that Meta removes from the DOM. The parent path is saved once; linked folder selections continue to supply all filenames.
+- v1.1.1 adds **Start from campaign day** so a verified/manual item can be skipped without duplicating it; dates still remain anchored to the campaign's Day 1 start date.
 - Facebook and Instagram receive separate verified date and time fields. A different Day 1 time is optional; every later day uses the daily time.
 - Reel sharing to the connected Facebook Story is enabled before scheduling when Meta exposes that option. Campaign hashtags remain part of the verified caption.
 - Reels open directly in Meta's dedicated Reel Composer and are considered ready only after the upload, caption, Cancel, and Next controls are present. This avoids false timeouts when Meta changes Planner's intermediate menu page.
