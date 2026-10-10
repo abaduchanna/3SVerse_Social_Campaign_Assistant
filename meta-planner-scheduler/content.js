@@ -151,6 +151,32 @@
     return true;
   }
 
+  async function waitForCompletedUpload(fileName) {
+    const started = Date.now();
+    let lastProgress = -1;
+    let lastAdvance = started;
+    while (Date.now() - started < 300000) {
+      const text = document.body.innerText || "";
+      const percentages = [...text.matchAll(/(?:^|\s)(\d{1,3})%/g)].map(match => Number(match[1])).filter(Number.isFinite);
+      const progress = percentages.length ? Math.max(...percentages) : -1;
+      if (progress > lastProgress) {
+        lastProgress = progress;
+        lastAdvance = Date.now();
+      }
+      const previewReady = /safe to publish|no copyright issues|reels?\s*\u00b7\s*\d+\s*seconds?/i.test(text);
+      const nextReady = Boolean(enabledExactButton("Next"));
+      if (nextReady && (progress >= 100 || previewReady || text.includes(fileName))) return true;
+      if (progress === 0 && Date.now() - lastAdvance > 45000) {
+        throw new Error(`Meta upload for ${fileName} stayed at 0% for 45 seconds.`);
+      }
+      if (progress > 0 && progress < 100 && Date.now() - lastAdvance > 90000) {
+        throw new Error(`Meta upload for ${fileName} stopped advancing at ${progress}%.`);
+      }
+      await sleep(700);
+    }
+    throw new Error(`Meta did not complete the upload for ${fileName} within 5 minutes; ${screenSummary()}`);
+  }
+
   function composerText() {
     return norm(modalRoot().innerText);
   }
@@ -246,10 +272,7 @@
     if (message.type === "PREPARE_META_ITEM") {
       (async () => {
         if (!active) active = { item: message.item, captionReady: false };
-        await waitFor(() => {
-          const text = document.body.innerText || "";
-          return text.includes(message.item.file.name) && (/(100%)|safe to publish|no copyright issues/i.test(text) || enabledExactButton("Next"));
-        }, 120000, 700, `the completed upload for ${message.item.file.name}`);
+        await waitForCompletedUpload(message.item.file.name);
         active.captionReady = await focusCaption(message.item.type);
         sendResponse({ ok: true, captionReady: active.captionReady, captionOptional: message.item.type === "story" });
       })().catch(error => sendResponse({ ok: false, error: error.message }));

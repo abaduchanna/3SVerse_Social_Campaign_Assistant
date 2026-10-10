@@ -203,11 +203,30 @@ async function scheduleItem(message) {
   const tab = await workflowTab(targetUrl);
   await waitReady(tab.id);
   await ensureContent(tab.id);
-  const opened = await chrome.tabs.sendMessage(tab.id, { type: "OPEN_META_ITEM", item: message.item });
-  if (!opened?.ok) throw new Error(opened?.error || "Meta composer was not ready.");
-  await uploadNativeFile(tab.id, message.item.file.path);
-  const prepared = await chrome.tabs.sendMessage(tab.id, { type: "PREPARE_META_ITEM", item: message.item });
-  if (!prepared?.ok || (!prepared.captionReady && !prepared.captionOptional)) throw new Error(prepared?.error || "Meta composer was not ready for text.");
+  let prepared;
+  let lastUploadError;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    if (attempt > 1) {
+      await chrome.tabs.update(tab.id, { url: targetUrl, active: false });
+      await waitReady(tab.id);
+      await ensureContent(tab.id);
+      await new Promise(resolve => setTimeout(resolve, 1200));
+    }
+    try {
+      const opened = await chrome.tabs.sendMessage(tab.id, { type: "OPEN_META_ITEM", item: message.item });
+      if (!opened?.ok) throw new Error(opened?.error || "Meta composer was not ready.");
+      await uploadNativeFile(tab.id, message.item.file.path);
+      prepared = await chrome.tabs.sendMessage(tab.id, { type: "PREPARE_META_ITEM", item: message.item });
+      if (!prepared?.ok || (!prepared.captionReady && !prepared.captionOptional)) {
+        throw new Error(prepared?.error || "Meta composer was not ready for text.");
+      }
+      break;
+    } catch (error) {
+      lastUploadError = error;
+      if (attempt === 3) throw new Error(`Meta upload failed after 3 attempts: ${error.message}`);
+    }
+  }
+  if (!prepared) throw lastUploadError || new Error("Meta upload did not prepare the item.");
   if (prepared.captionReady) await trustedInsert(tab.id, message.item.caption);
   const scheduling = await chrome.tabs.sendMessage(tab.id, { type: "OPEN_META_SCHEDULE", item: message.item });
   if (!scheduling?.ok || !scheduling.scheduleReady) throw new Error(scheduling?.error || "Meta schedule controls were not ready.");
