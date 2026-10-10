@@ -273,6 +273,17 @@
       })().catch(error => sendResponse({ ok: false, error: error.message }));
       return true;
     }
+    if (message.type === "ATTACH_META_FILE") {
+      (async () => {
+        if (!active) throw new Error("Meta scheduling state was lost. Retry this item.");
+        if (!Array.isArray(message.media?.bytes) || !message.media.bytes.length) {
+          throw new Error("The selected media bytes were not available to the Meta uploader.");
+        }
+        await attachFile(message.media, message.item.type);
+        sendResponse({ ok: true, attached: true });
+      })().catch(error => sendResponse({ ok: false, error: error.message }));
+      return true;
+    }
     if (message.type === "PREPARE_META_ITEM") {
       (async () => {
         if (!active) active = { item: message.item, captionReady: false };

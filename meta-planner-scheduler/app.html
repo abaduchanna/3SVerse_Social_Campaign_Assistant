@@ -22,13 +22,16 @@
         <input id="reelFolder" type="file" webkitdirectory multiple>
       </label>
       <p id="reelSummary" class="hint">Use only when the campaign is split across two folders.</p>
-      <label>Campaign folder 1 path
-        <input id="captionPath" type="text" value="C:\Users\AbadUmairChanna\Downloads\3SVerse_LinkedIn_Campaign_Oct_2026" spellcheck="false">
-      </label>
-      <label>Campaign folder 2 path <span class="hint">(optional)</span>
-        <input id="reelPath" type="text" value="C:\Users\AbadUmairChanna\Downloads\3SVerse_30_Day_Social_Campaign_Bundle" spellcheck="false">
-      </label>
-      <p class="hint">These exact paths keep Meta uploads correct whether you select the whole campaign folder or its images/Reels subfolder.</p>
+      <details>
+        <summary>Advanced upload fallback (normally not needed)</summary>
+        <label>Campaign folder 1 Windows path <span class="hint">(optional)</span>
+          <input id="captionPath" type="text" value="C:\Users\AbadUmairChanna\Downloads\3SVerse_LinkedIn_Campaign_Oct_2026" spellcheck="false">
+        </label>
+        <label>Campaign folder 2 Windows path <span class="hint">(optional)</span>
+          <input id="reelPath" type="text" value="C:\Users\AbadUmairChanna\Downloads\3SVerse_30_Day_Social_Campaign_Bundle" spellcheck="false">
+        </label>
+        <p class="hint">Only used if Chrome blocks direct media transfer. Folder linking above is the normal uploader.</p>
+      </details>
     </section>
 
     <section class="card grid">
@@ -61,7 +64,7 @@
       <p id="status" role="status">Ready.</p>
     </section>
   </main>
-  <footer>v1.2.0 · 3SVerse · Local-first · Trusted Meta workflow controls</footer>
+  <footer>v1.2.1 · 3SVerse · Local-first · Direct media upload</footer>
   <script src="lib.js"></script>
   <script src="app.js"></script>
 </body>

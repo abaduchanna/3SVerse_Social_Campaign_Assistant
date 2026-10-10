@@ -222,6 +222,32 @@ async function uploadNativeFile(tabId, filePath) {
   }
 }
 
+async function uploadCampaignFile(tabId, item) {
+  let byteUploadError;
+  if (Array.isArray(item.file?.bytes) && item.file.bytes.length) {
+    try {
+      const response = await chrome.tabs.sendMessage(tabId, {
+        type: "ATTACH_META_FILE",
+        item,
+        media: {
+          name: item.file.name,
+          type: item.file.type,
+          bytes: item.file.bytes
+        }
+      });
+      if (response?.ok && response.attached) return "bytes";
+      throw new Error(response?.error || "Meta rejected the in-page media attachment.");
+    } catch (error) {
+      byteUploadError = error;
+    }
+  }
+  if (item.file?.path) {
+    await uploadNativeFile(tabId, item.file.path);
+    return "native";
+  }
+  throw new Error(`The proven in-page uploader failed${byteUploadError ? `: ${byteUploadError.message}` : ""}. Relink the campaign folder and retry.`);
+}
+
 async function trustedScheduleInput(tabId, date, time) {
   const [year, month, day] = date.split("-");
   const [hours, minutes] = time.split(":");
@@ -295,7 +321,7 @@ async function scheduleItem(message) {
     try {
       const opened = await chrome.tabs.sendMessage(tab.id, { type: "OPEN_META_ITEM", item: message.item });
       if (!opened?.ok) throw new Error(opened?.error || "Meta composer was not ready.");
-      await uploadNativeFile(tab.id, message.item.file.path);
+      await uploadCampaignFile(tab.id, message.item);
       prepared = await chrome.tabs.sendMessage(tab.id, { type: "PREPARE_META_ITEM", item: message.item });
       if (!prepared?.ok || (!prepared.captionReady && !prepared.captionOptional)) {
         throw new Error(prepared?.error || "Meta composer was not ready for text.");

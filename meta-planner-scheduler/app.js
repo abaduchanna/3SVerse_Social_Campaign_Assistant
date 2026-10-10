@@ -86,12 +86,20 @@ async function filePayload(file) {
   const source = sourceForFile.get(file);
   const pathInput = source === "reelFolder" ? $("#reelPath") : $("#captionPath");
   const base = pathInput.value.trim().replace(/[\\/]+$/, "");
-  if (!base) throw new Error(`Enter the exact path for ${source === "reelFolder" ? "Campaign folder 2" : "Campaign folder 1"}.`);
   let relative = (file.webkitRelativePath || file.name).replace(/[\\/]+/g, WINDOWS_SEPARATOR);
-  const baseLeaf = base.split(/[\\/]/).filter(Boolean).at(-1).toLowerCase();
-  const firstRelative = relative.split(WINDOWS_SEPARATOR)[0].toLowerCase();
-  if (firstRelative === baseLeaf) relative = relative.split(WINDOWS_SEPARATOR).slice(1).join(WINDOWS_SEPARATOR);
-  return { name: file.name, type: file.type || "application/octet-stream", path: `${base}${WINDOWS_SEPARATOR}${relative}` };
+  let path = "";
+  if (base) {
+    const baseLeaf = base.split(/[\\/]/).filter(Boolean).at(-1).toLowerCase();
+    const firstRelative = relative.split(WINDOWS_SEPARATOR)[0].toLowerCase();
+    if (firstRelative === baseLeaf) relative = relative.split(WINDOWS_SEPARATOR).slice(1).join(WINDOWS_SEPARATOR);
+    path = `${base}${WINDOWS_SEPARATOR}${relative}`;
+  }
+  return {
+    name: file.name,
+    type: file.type || "application/octet-stream",
+    bytes: Array.from(new Uint8Array(await file.arrayBuffer())),
+    path
+  };
 }
 
 async function start() {
