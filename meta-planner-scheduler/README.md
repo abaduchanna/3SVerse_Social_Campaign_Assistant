@@ -10,6 +10,7 @@ This Chrome extension is the Meta Business Suite companion inside the 3SVerse So
 - Default start is tomorrow at 9:00 AM in the computer's Central Time setting.
 - Reels are enabled by default. Image posts and Stories are optional.
 - It uses the detected 3SVerse Meta Planner URL and requires Meta's **Post to** selector to contain both Facebook and Instagram before continuing.
+- Reels open directly in Meta's dedicated Reel Composer and are considered ready only after the upload, caption, Cancel, and Next controls are present. This avoids false timeouts when Meta changes Planner's intermediate menu page.
 - Each item stops on the first missing control, lost caption, upload error, or missing scheduling confirmation.
 
 ## Install

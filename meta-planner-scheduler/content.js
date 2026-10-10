@@ -8,6 +8,27 @@
   const visible = element => Boolean(element && element.getClientRects().length && getComputedStyle(element).visibility !== "hidden");
   const controls = () => [...document.querySelectorAll('button,[role="button"],[role="menuitem"],label')].filter(visible);
   const exactControl = text => controls().find(element => norm(element.innerText || element.getAttribute("aria-label")) === norm(text));
+  const routeFor = type => type === "reel" ? /\/reels_composer\/?$/ : type === "story" ? /\/stories\/composer\/?$/ : /\/content_calendar\/?$/;
+
+  function captionEditor() {
+    return [...document.querySelectorAll('textarea,[contenteditable="true"][role="textbox"],input[type="text"]')]
+      .filter(visible)
+      .find(element => /write in the dialogue box|write.*post|caption|describe/i.test(
+        `${element.getAttribute("aria-label") || ""} ${element.placeholder || ""}`
+      ));
+  }
+
+  function composerReady(type) {
+    if (type === "reel") {
+      return routeFor(type).test(location.pathname)
+        && Boolean(exactControl("Add video"))
+        && Boolean(captionEditor())
+        && Boolean(exactControl("Cancel"))
+        && Boolean(exactControl("Next"));
+    }
+    const heading = type === "story" ? "create story" : "create post";
+    return [...document.querySelectorAll("h1,h2")].some(element => visible(element) && norm(element.innerText) === heading);
+  }
 
   function screenSummary() {
     const headings = [...document.querySelectorAll("h1,h2,h3")].filter(visible).map(element => element.innerText.trim()).filter(Boolean).slice(-4);
@@ -37,6 +58,7 @@
   }
 
   async function openComposer(type) {
+    if (composerReady(type)) return;
     if (!location.pathname.includes("content_calendar")) throw new Error("Open Meta Planner before starting the scheduler.");
     if (type === "post") {
       (await waitFor(() => exactControl("Create post"))).click();
@@ -45,8 +67,7 @@
       await openCreateMenu();
       const labels = type === "reel" ? ["Reel", "Create reel"] : ["Story", "Create Story"];
       (await waitFor(() => labels.map(exactControl).find(Boolean), 15000, 250, `${type} in Meta's Create menu`)).click();
-      const heading = type === "reel" ? "create reel" : "create story";
-      await waitFor(() => [...document.querySelectorAll("h1,h2")].some(element => visible(element) && norm(element.innerText) === heading), 30000, 300, `the ${heading} composer`);
+      await waitFor(() => composerReady(type), 45000, 300, `the ${type} composer controls`);
     }
     await sleep(700);
   }
@@ -110,10 +131,7 @@
 
   async function focusCaption(type) {
     if (type === "story") return false;
-    const root = modalRoot();
-    const editor = await waitFor(() => [...root.querySelectorAll('textarea,[contenteditable="true"][role="textbox"],input[type="text"]')]
-      .filter(visible)
-      .find(element => !/search|tag/i.test(element.getAttribute("aria-label") || element.placeholder || "")), 30000);
+    const editor = await waitFor(captionEditor, 30000, 300, "Meta's reel caption box");
     editor.focus();
     if (editor.isContentEditable) document.execCommand("selectAll", false);
     else {
