@@ -6,8 +6,10 @@ const root = path.resolve(__dirname, "..");
 const background = fs.readFileSync(path.join(root, "background.js"), "utf8");
 const content = fs.readFileSync(path.join(root, "content.js"), "utf8");
 const manifest = JSON.parse(fs.readFileSync(path.join(root, "manifest.json"), "utf8"));
+const appHtml = fs.readFileSync(path.join(root, "app.html"), "utf8");
 
 assert.equal(manifest.version, "1.4.1");
+assert.match(appHtml, /v1\.4\.1/);
 assert.match(background, /const targetUrl = message\.plannerUrl;/);
 assert.match(background, /item\.type === "post"[\s\S]*labels: \["Create post"\]/);
 assert.match(background, /item\.type === "reel" \? \["Create reel", "Reel"\] : \["Create Story", "Story"\]/);
