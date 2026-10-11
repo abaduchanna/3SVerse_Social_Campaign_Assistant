@@ -112,6 +112,42 @@ async function trustedClick(tabId, request) {
   }
 }
 
+async function trustedKeyActivate(tabId, label) {
+  const target = { tabId };
+  let attached = false;
+  try {
+    await chrome.debugger.attach(target, "1.3");
+    attached = true;
+    await chrome.debugger.sendCommand(target, "Runtime.enable");
+    const focused = await chrome.debugger.sendCommand(target, "Runtime.evaluate", {
+      expression: `(() => {
+        const wanted = ${JSON.stringify(label)}.toLowerCase();
+        const norm = value => String(value || "").normalize("NFKC").replace(/\\s+/g, " ").trim().toLowerCase();
+        const visible = element => Boolean(element && element.getClientRects().length && getComputedStyle(element).visibility !== "hidden");
+        const button = [...document.querySelectorAll('button,[role="button"]')]
+          .filter(visible)
+          .filter(element => !element.matches(':disabled,[aria-disabled="true"]'))
+          .filter(element => norm(element.innerText || element.getAttribute("aria-label")) === wanted)
+          .at(-1);
+        if (!button) return false;
+        button.scrollIntoView({ block: "center", inline: "center" });
+        button.focus({ preventScroll: true });
+        return document.activeElement === button || button.contains(document.activeElement);
+      })()`,
+      returnByValue: true
+    });
+    if (!focused?.result?.value) throw new Error(`Meta's ${label} button could not receive keyboard focus.`);
+    await chrome.debugger.sendCommand(target, "Input.dispatchKeyEvent", {
+      type: "rawKeyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13
+    });
+    await chrome.debugger.sendCommand(target, "Input.dispatchKeyEvent", {
+      type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13
+    });
+  } finally {
+    if (attached) try { await chrome.debugger.detach(target); } catch (_) {}
+  }
+}
+
 async function readFlowState(tabId) {
   const response = await chrome.tabs.sendMessage(tabId, { type: "GET_META_FLOW_STATE" });
   if (!response?.ok) throw new Error(response?.error || "Meta flow state could not be read.");
@@ -139,20 +175,31 @@ async function foregroundTrustedNext(tabId, previousStage) {
       await new Promise(resolve => setTimeout(resolve, 500));
     }
     await trustedClick(tabId, { labels: ["Next"], preferLast: true });
-    // The browser event has already been delivered. Return the user's tab
-    // promptly while Meta completes its transition in the workflow tab.
-    await new Promise(resolve => setTimeout(resolve, 350));
+    try {
+      // Keep Meta active until its React editor commits the stage change.
+      // Restoring the scheduler tab after a fixed 350 ms interrupted this step.
+      return await waitForFlowState(
+        tabId,
+        current => current.shareStep || current.stageKey !== previousStage,
+        15000,
+        "Meta did not accept the Edit-stage mouse click"
+      );
+    } catch (_) {
+      // A focused trusted Enter is Meta's reliable accessibility activation
+      // when its media editor ignores pointer input.
+      await trustedKeyActivate(tabId, "Next");
+      return await waitForFlowState(
+        tabId,
+        current => current.shareStep || current.stageKey !== previousStage,
+        45000,
+        "Meta ignored both the Edit-stage mouse click and focused Enter"
+      );
+    }
   } finally {
     if (shouldRestore) {
       try { await chrome.tabs.update(previous.id, { active: true }); } catch (_) {}
     }
   }
-  return waitForFlowState(
-    tabId,
-    current => current.shareStep || current.stageKey !== previousStage,
-    60000,
-    "Meta ignored the visible Next button even after a foreground browser click"
-  );
 }
 
 async function reachTrustedScheduleStep(tabId, item) {
