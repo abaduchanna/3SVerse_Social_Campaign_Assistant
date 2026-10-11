@@ -89,8 +89,14 @@ async function trustedClick(tabId, request) {
       if (request.requireChecked === false) matches = matches.filter(element => !(element.checked || element.getAttribute("aria-checked") === "true"));
       const element = request.preferLast ? matches.at(-1) : matches[0];
       if (!element) return null;
+      element.scrollIntoView({ block: "center", inline: "center" });
+      element.focus({ preventScroll: true });
       const rect = element.getBoundingClientRect();
-      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, label: textFor(element).trim() };
+      const x = rect.left + rect.width / 2;
+      const y = rect.top + rect.height / 2;
+      const hit = document.elementFromPoint(x, y);
+      if (!hit || !(hit === element || element.contains(hit))) return null;
+      return { x, y, label: textFor(element).trim() };
     })()`;
     const located = await chrome.debugger.sendCommand(target, "Runtime.evaluate", { expression, returnByValue: true });
     const point = located?.result?.value;
@@ -134,23 +140,28 @@ async function reachTrustedScheduleStep(tabId, item) {
   }
 
   if (item.type === "reel") {
-    const deadline = Date.now() + 180000;
-    let clickAttempts = 0;
-    let lastClick = 0;
-    let state;
-    while (Date.now() < deadline) {
-      state = await readFlowState(tabId);
-      if (state.shareStep) break;
-      if (state.nextReady && Date.now() - lastClick >= 2500 && clickAttempts < 12) {
+    let state = await readFlowState(tabId);
+    let transitions = 0;
+    while (!state.shareStep && transitions < 3) {
+      const advanced = await chrome.tabs.sendMessage(tabId, { type: "ACTIVATE_META_NEXT" });
+      if (!advanced?.ok) {
+        // Meta occasionally rejects programmatic DOM activation. The fallback
+        // is a real browser mouse event, now scrolled and hit-tested first.
         await trustedClick(tabId, { labels: ["Next"], preferLast: true });
-        clickAttempts += 1;
-        lastClick = Date.now();
+        const previousStage = state.stageKey;
+        state = await waitForFlowState(
+          tabId,
+          current => current.shareStep || current.stageKey !== previousStage,
+          20000,
+          "Meta ignored the visible Next button"
+        );
+      } else {
+        state = advanced.state;
       }
-      await new Promise(resolve => setTimeout(resolve, 500));
+      transitions += 1;
     }
-    state = await readFlowState(tabId);
     if (!state.shareStep) {
-      throw new Error(`Meta did not reach the Share/Scheduling step after ${clickAttempts} trusted Next attempts; ${state.summary}`);
+      throw new Error(`Meta did not reach the Share/Scheduling step after ${transitions} verified stage transitions; ${state.summary}`);
     }
   } else {
     await waitForFlowState(

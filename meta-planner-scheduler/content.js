@@ -212,6 +212,33 @@
     ));
   }
 
+  function reelStageKey() {
+    return [...document.querySelectorAll('button,[role="button"]')]
+      .filter(visible)
+      .map(element => norm(element.getAttribute("aria-label") || element.innerText))
+      .filter(label => /^(create|edit|share) (pending|completed) status$/.test(label))
+      .join("|");
+  }
+
+  async function activateNext() {
+    const beforeStage = reelStageKey();
+    const next = enabledExactButton("Next");
+    if (!next) throw new Error(`Meta's enabled Next button was not found; ${screenSummary()}`);
+    next.scrollIntoView({ block: "center", inline: "center" });
+    next.focus({ preventScroll: true });
+    next.click();
+    await waitFor(
+      () => {
+        const state = flowState(active.item);
+        return state.shareStep || (state.stageKey && state.stageKey !== beforeStage) ? state : null;
+      },
+      20000,
+      250,
+      "the next Reel stage after clicking Next"
+    );
+    return flowState(active.item);
+  }
+
   async function activateSchedule() {
     if (document.querySelectorAll("input[placeholder='dd/mm/yyyy']").length >= 2) return true;
     for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -247,6 +274,7 @@
     return {
       captionRetained: item.type === "story" || composerText().includes(norm(item.caption)),
       nextReady: Boolean(enabledExactButton("Next")),
+      stageKey: item.type === "reel" ? reelStageKey() : item.type,
       shareStep: itemShareStep,
       scheduleSelected: checked(schedule) || document.querySelectorAll("input[placeholder='dd/mm/yyyy']").length >= 2,
       storyAvailable: Boolean(story),
@@ -335,6 +363,14 @@
       (async () => {
         if (!active) throw new Error("Meta scheduling state was lost. Retry this item.");
         sendResponse({ ok: true, state: flowState(active.item) });
+      })().catch(error => sendResponse({ ok: false, error: error.message }));
+      return true;
+    }
+    if (message.type === "ACTIVATE_META_NEXT") {
+      (async () => {
+        if (!active || active.item.type !== "reel") throw new Error("The active item is not a Reel.");
+        const state = await activateNext();
+        sendResponse({ ok: true, state });
       })().catch(error => sendResponse({ ok: false, error: error.message }));
       return true;
     }
