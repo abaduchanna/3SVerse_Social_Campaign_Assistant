@@ -351,18 +351,53 @@ async function reloadComposer(tabId) {
   await new Promise(resolve => setTimeout(resolve, 1200));
 }
 
+async function hardOpenComposer(tabId, targetUrl) {
+  // Meta redirects a completed Reel workflow to its generic Create post SPA.
+  // A reload then reloads that wrong SPA state even when the address previously
+  // belonged to the Reel Composer. Pass through about:blank so every item gets
+  // a real document navigation to the exact Reel Composer URL.
+  await chrome.tabs.update(tabId, { url: "about:blank", active: false });
+  const blankStarted = Date.now();
+  while (Date.now() - blankStarted < 15000) {
+    const current = await chrome.tabs.get(tabId);
+    if (current.url === "about:blank" && current.status === "complete") break;
+    await new Promise(resolve => setTimeout(resolve, 200));
+  }
+  await chrome.tabs.update(tabId, { url: targetUrl, active: false });
+  const target = new URL(targetUrl);
+  const started = Date.now();
+  while (Date.now() - started < 90000) {
+    const current = await chrome.tabs.get(tabId);
+    let currentUrl;
+    try { currentUrl = new URL(current.url || ""); } catch (_) { currentUrl = null; }
+    if (current.status === "complete"
+      && currentUrl?.origin === target.origin
+      && currentUrl.pathname === target.pathname) {
+      await ensureContent(tabId);
+      await new Promise(resolve => setTimeout(resolve, 1200));
+      return;
+    }
+    await new Promise(resolve => setTimeout(resolve, 250));
+  }
+  throw new Error("Meta did not open the exact Reel Composer link.");
+}
+
 async function scheduleItem(message) {
   const targetUrl = message.item.type === "reel" ? reelComposerUrl(message.plannerUrl) : message.plannerUrl;
   const tab = await workflowTab(targetUrl);
-  await waitReady(tab.id);
-  // Every queue item starts from a fresh Meta composer. Reusing the completed
-  // previous composer leaves the next item in a loading loop with no upload.
-  await reloadComposer(tab.id);
+  // Every queue item starts from the exact link used by the first reel. Meta's
+  // generic Create post redirect must never be reused for a Reel upload.
+  if (message.item.type === "reel") await hardOpenComposer(tab.id, targetUrl);
+  else {
+    await waitReady(tab.id);
+    await reloadComposer(tab.id);
+  }
   let prepared;
   let lastUploadError;
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     if (attempt > 1) {
-      await reloadComposer(tab.id);
+      if (message.item.type === "reel") await hardOpenComposer(tab.id, targetUrl);
+      else await reloadComposer(tab.id);
     }
     try {
       const opened = await chrome.tabs.sendMessage(tab.id, { type: "OPEN_META_ITEM", item: message.item });
@@ -387,6 +422,12 @@ async function scheduleItem(message) {
   await trustedClick(tab.id, { labels: ["Schedule"], preferLast: true });
   const finished = await chrome.tabs.sendMessage(tab.id, { type: "VERIFY_META_ITEM", item: message.item });
   if (!finished?.ok || !finished.scheduled) throw new Error(finished?.error || "Meta did not confirm the scheduled item.");
+  if (message.item.type === "reel") {
+    // The scheduled item is already committed at this point. A temporary Meta
+    // navigation failure must not report it as failed and create a duplicate.
+    try { await hardOpenComposer(tab.id, targetUrl); }
+    catch (_) { await chrome.tabs.update(tab.id, { url: targetUrl, active: false }); }
+  }
   return finished;
 }
 
