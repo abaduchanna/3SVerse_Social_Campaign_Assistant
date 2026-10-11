@@ -226,6 +226,44 @@ async function uploadCampaignFile(tabId, item) {
   let byteUploadError;
   if (Array.isArray(item.file?.bytes) && item.file.bytes.length) {
     try {
+      const injected = await chrome.scripting.executeScript({
+        target: { tabId },
+        world: "MAIN",
+        args: [{ name: item.file.name, type: item.file.type, bytes: item.file.bytes }, item.type],
+        func: async (media, type) => {
+          const norm = value => String(value || "").normalize("NFKC").replace(/\s+/g, " ").trim().toLowerCase();
+          const visible = element => Boolean(element && element.getClientRects().length && getComputedStyle(element).visibility !== "hidden");
+          const upload = [...document.querySelectorAll('button,[role="button"],label')]
+            .filter(visible)
+            .find(element => /^(add|upload) (video|photo|photos|media|photos\/videos)$/.test(norm(element.innerText || element.getAttribute("aria-label"))));
+          if (!upload) return { ok: false, error: "Meta's visible upload button was not found." };
+
+          const file = new File([new Uint8Array(media.bytes)], media.name, { type: media.type || "application/octet-stream" });
+          const transfer = new DataTransfer();
+          transfer.items.add(file);
+          const originalClick = HTMLInputElement.prototype.click;
+          let captured = false;
+          HTMLInputElement.prototype.click = function (...args) {
+            const accept = this.accept || "";
+            const compatible = this.type === "file" && (type !== "reel" || !accept || /video/i.test(accept));
+            if (!compatible) return originalClick.apply(this, args);
+            this.files = transfer.files;
+            this.dispatchEvent(new Event("input", { bubbles: true }));
+            this.dispatchEvent(new Event("change", { bubbles: true }));
+            captured = true;
+          };
+          try {
+            upload.click();
+            await new Promise(resolve => setTimeout(resolve, 0));
+          } finally {
+            HTMLInputElement.prototype.click = originalClick;
+          }
+          return captured ? { ok: true, attached: true } : { ok: false, error: "Meta did not invoke its detached file input." };
+        }
+      });
+      const mainResult = injected?.[0]?.result;
+      if (mainResult?.ok && mainResult.attached) return "detached-bytes";
+
       const response = await chrome.tabs.sendMessage(tabId, {
         type: "ATTACH_META_FILE",
         item,
@@ -236,7 +274,7 @@ async function uploadCampaignFile(tabId, item) {
         }
       });
       if (response?.ok && response.attached) return "bytes";
-      throw new Error(response?.error || "Meta rejected the in-page media attachment.");
+      throw new Error(response?.error || mainResult?.error || "Meta rejected the in-page media attachment.");
     } catch (error) {
       byteUploadError = error;
     }

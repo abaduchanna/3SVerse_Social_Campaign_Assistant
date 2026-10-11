@@ -111,28 +111,7 @@
     const existing = [...document.querySelectorAll('input[type="file"]')].find(acceptInput);
     if (existing && applyFile(existing)) return;
 
-    const upload = controls().find(element => /add (video|photo|media)|upload (video|photo|media)/i.test(element.innerText || element.getAttribute("aria-label") || ""));
-    if (!upload) throw new Error(`Meta upload button was not found; ${screenSummary()}`);
-    await new Promise((resolve, reject) => {
-      let settled = false;
-      const finish = (ok, error) => {
-        if (settled) return;
-        settled = true;
-        observer.disconnect();
-        clearTimeout(timer);
-        ok ? resolve() : reject(error);
-      };
-      const inspect = node => {
-        if (node?.matches?.('input[type="file"]') && acceptInput(node) && applyFile(node)) return finish(true);
-        const child = node?.querySelectorAll ? [...node.querySelectorAll('input[type="file"]')].find(acceptInput) : null;
-        if (child && applyFile(child)) finish(true);
-      };
-      const observer = new MutationObserver(records => records.forEach(record => record.addedNodes.forEach(inspect)));
-      observer.observe(document.documentElement, { childList: true, subtree: true });
-      const timer = setTimeout(() => finish(false, new Error(`Meta did not expose its file input after the upload click; ${screenSummary()}`)), 20000);
-      upload.click();
-      [...document.querySelectorAll('input[type="file"]')].filter(acceptInput).forEach(input => { if (applyFile(input)) finish(true); });
-    });
+    throw new Error(`Meta keeps this upload input detached from the DOM; ${screenSummary()}`);
   }
 
   async function focusCaption(type) {
