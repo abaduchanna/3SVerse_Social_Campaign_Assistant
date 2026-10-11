@@ -187,7 +187,7 @@ async function openMetaItemFromPlanner(tabId, item) {
     if (item.type === "post") {
       await trustedClick(tabId, { labels: ["Create post"], preferLast: false });
     } else {
-      const menuLabel = item.type === "reel" ? "Create reel" : "Create Story";
+      const menuLabels = item.type === "reel" ? ["Create reel", "Reel"] : ["Create Story", "Story"];
       await trustedClick(tabId, { labels: ["Create"], preferLast: false });
       await waitForLaunchState(
         tabId,
@@ -196,7 +196,7 @@ async function openMetaItemFromPlanner(tabId, item) {
         15000,
         "Meta's Create dropdown did not open"
       );
-      await trustedClick(tabId, { labels: [menuLabel], preferLast: false });
+      await trustedClick(tabId, { labels: menuLabels, preferLast: false });
     }
     const opened = await chrome.tabs.sendMessage(tabId, { type: "WAIT_META_COMPOSER", item });
     if (!opened?.ok || !opened.composerReady) {
@@ -546,8 +546,10 @@ async function scheduleItem(message) {
     if (attempt > 1) {
       await hardOpenWorkflow(tab.id, targetUrl);
     }
+    let attemptPhase = "Meta Planner/composer launch";
     try {
       await openMetaItemFromPlanner(tab.id, message.item);
+      attemptPhase = "Meta upload/preparation";
       await uploadCampaignFile(tab.id, message.item);
       prepared = await chrome.tabs.sendMessage(tab.id, { type: "PREPARE_META_ITEM", item: message.item });
       if (!prepared?.ok || (!prepared.captionReady && !prepared.captionOptional)) {
@@ -556,7 +558,7 @@ async function scheduleItem(message) {
       break;
     } catch (error) {
       lastUploadError = error;
-      if (attempt === 3) throw new Error(`Meta upload failed after 3 attempts: ${error.message}`);
+      if (attempt === 3) throw new Error(`${attemptPhase} failed after 3 attempts: ${error.message}`);
     }
   }
   if (!prepared) throw lastUploadError || new Error("Meta upload did not prepare the item.");

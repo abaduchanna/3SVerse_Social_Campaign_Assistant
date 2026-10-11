@@ -8,6 +8,9 @@
   const visible = element => Boolean(element && element.getClientRects().length && getComputedStyle(element).visibility !== "hidden");
   const controls = () => [...document.querySelectorAll('button,[role="button"],[role="menuitem"],label')].filter(visible);
   const exactControl = text => controls().find(element => norm(element.innerText || element.getAttribute("aria-label")) === norm(text));
+  const exactHeading = text => [...document.querySelectorAll('[role="heading"],h1,h2,h3,h4')]
+    .filter(visible)
+    .find(element => norm(element.innerText || element.getAttribute("aria-label")) === norm(text));
   const routeFor = type => type === "reel" ? /\/reels_composer\/?$/ : type === "story" ? /\/stories\/composer\/?$/ : /\/content_calendar\/?$/;
 
   function captionEditor() {
@@ -27,11 +30,15 @@
         && Boolean(exactControl("Next"));
     }
     const heading = type === "story" ? "create story" : "create post";
-    return [...document.querySelectorAll("h1,h2")].some(element => visible(element) && norm(element.innerText) === heading);
+    return Boolean(exactHeading(heading));
   }
 
   function screenSummary() {
-    const headings = [...document.querySelectorAll("h1,h2,h3")].filter(visible).map(element => element.innerText.trim()).filter(Boolean).slice(-4);
+    const headings = [...document.querySelectorAll('[role="heading"],h1,h2,h3,h4')]
+      .filter(visible)
+      .map(element => (element.innerText || element.getAttribute("aria-label") || "").trim())
+      .filter(Boolean)
+      .slice(-4);
     const buttons = controls().map(element => (element.innerText || element.getAttribute("aria-label") || "").trim()).filter(Boolean).slice(-12);
     return `screen=[${headings.join(" > ") || "no heading"}], controls=[${buttons.join(" | ") || "none"}]`;
   }
@@ -53,14 +60,18 @@
   function createMenuButton() {
     return [...document.querySelectorAll('button,[role="button"]')]
       .filter(visible)
-      .find(element => norm(element.innerText || element.getAttribute("aria-label")) === "create"
-        && (element.getAttribute("aria-haspopup") === "menu" || element.getAttribute("aria-expanded") !== null));
+      // Meta currently exposes the split-button arrow as
+      // <button role="link" aria-label="Create"> without aria-haspopup or
+      // aria-expanded, even though its accessibility tree calls it a popup
+      // button. Match the exact button label instead of invented attributes.
+      .find(element => norm(element.innerText || element.getAttribute("aria-label")) === "create");
   }
 
-  function createMenuItem(label) {
+  function createMenuItem(labels) {
+    const wanted = (Array.isArray(labels) ? labels : [labels]).map(norm);
     return [...document.querySelectorAll('[role="menuitem"]')]
       .filter(visible)
-      .find(element => norm(element.innerText || element.getAttribute("aria-label")) === norm(label));
+      .find(element => wanted.includes(norm(element.innerText || element.getAttribute("aria-label"))));
   }
 
   function ensureFacebookAndInstagram() {
@@ -320,11 +331,11 @@
           ok: true,
           state: {
             plannerReady: location.pathname.includes("content_calendar")
-              && [...document.querySelectorAll("h1,h2")].some(element => visible(element) && norm(element.innerText) === "planner")
+              && Boolean(exactHeading("Planner"))
               && Boolean(exactControl("Create post"))
               && Boolean(createMenuButton()),
-            reelMenuReady: Boolean(createMenuItem("Create reel")),
-            storyMenuReady: Boolean(createMenuItem("Create Story")),
+            reelMenuReady: Boolean(createMenuItem(["Create reel", "Reel"])),
+            storyMenuReady: Boolean(createMenuItem(["Create Story", "Story"])),
             composerReady: Boolean(type && composerReady(type)),
             summary: screenSummary()
           }
