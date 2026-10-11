@@ -1,5 +1,4 @@
 const PLANNER_MATCH = "https://business.facebook.com/*";
-const REEL_COMPOSER_URL = "https://business.facebook.com/latest/reels_composer/?asset_id=1376773818846890&business_id=4880742675547794&ref=biz_web_left_nav_create_reel&context_ref=CONTENT_CALENDAR";
 
 function withTimeout(promise, timeout, message) {
   let timer;
@@ -25,12 +24,6 @@ async function workflowTab(url) {
   const tab = await chrome.tabs.create({ url, active: false });
   await chrome.storage.local.set({ metaPlannerTabId: tab.id });
   return tab;
-}
-
-function reelComposerUrl(plannerUrl) {
-  // This is the owner's verified starting link. Do not let Meta's post-submit
-  // Create-post redirect or a mutated Planner route become the next reel URL.
-  return REEL_COMPOSER_URL;
 }
 
 async function ensureContent(tabId) {
@@ -477,10 +470,11 @@ async function hardOpenWorkflow(tabId, targetUrl) {
 }
 
 async function scheduleItem(message) {
-  const targetUrl = message.item.type === "reel" ? reelComposerUrl(message.plannerUrl) : message.plannerUrl;
+  // Every item starts from the verified Planner. Reel and Story must be chosen
+  // from the Create split-button menu; only a Post may use Create post.
+  const targetUrl = message.plannerUrl;
   const tab = await workflowTab(targetUrl);
-  // Reel starts at the verified Reel Composer. Post and Story start at the
-  // verified Planner. No item may reuse Meta's previous SPA composer state.
+  // No item may reuse Meta's previous SPA composer state.
   await hardOpenWorkflow(tab.id, targetUrl);
   let prepared;
   let lastUploadError;

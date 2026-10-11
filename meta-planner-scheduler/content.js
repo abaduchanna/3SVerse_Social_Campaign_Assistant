@@ -50,11 +50,24 @@
     return [...document.querySelectorAll('[role="dialog"]')].filter(visible).at(-1) || document.body;
   }
 
+  function createMenuButton() {
+    return [...document.querySelectorAll('button,[role="button"]')]
+      .filter(visible)
+      .find(element => norm(element.innerText || element.getAttribute("aria-label")) === "create"
+        && (element.getAttribute("aria-haspopup") === "menu" || element.getAttribute("aria-expanded") !== null));
+  }
+
+  function createMenuItem(label) {
+    return [...document.querySelectorAll('[role="menuitem"]')]
+      .filter(visible)
+      .find(element => norm(element.innerText || element.getAttribute("aria-label")) === norm(label));
+  }
+
   async function openCreateMenu() {
-    if (exactControl("Reel") || exactControl("Create reel") || exactControl("Story") || exactControl("Create Story")) return;
-    const create = await waitFor(() => exactControl("Create"));
+    if (createMenuItem("Create reel") || createMenuItem("Create Story")) return;
+    const create = await waitFor(createMenuButton, 15000, 250, "the Create dropdown arrow next to Create post");
     create.click();
-    await waitFor(() => exactControl("Story") || exactControl("Create Story") || exactControl("Reel") || exactControl("Create reel"), 15000, 250, "the Create menu options");
+    await waitFor(() => createMenuItem("Create Story") || createMenuItem("Create reel"), 15000, 250, "the Create Story / Create reel dropdown menu");
   }
 
   async function openComposer(type) {
@@ -65,8 +78,8 @@
       await waitFor(() => [...document.querySelectorAll("h1,h2")].some(element => visible(element) && norm(element.innerText) === "create post"));
     } else {
       await openCreateMenu();
-      const labels = type === "reel" ? ["Reel", "Create reel"] : ["Story", "Create Story"];
-      (await waitFor(() => labels.map(exactControl).find(Boolean), 15000, 250, `${type} in Meta's Create menu`)).click();
+      const label = type === "reel" ? "Create reel" : "Create Story";
+      (await waitFor(() => createMenuItem(label), 15000, 250, `${label} in Meta's Create dropdown menu`)).click();
       await waitFor(() => composerReady(type), 45000, 300, `the ${type} composer controls`);
     }
     await sleep(700);
