@@ -74,7 +74,7 @@ async function trustedClick(tabId, request) {
         return element.closest("label")?.innerText || "";
       };
       const labels = request.labels.map(norm);
-      let matches = [...document.querySelectorAll('button,[role="button"],[role="checkbox"],[role="radio"],input[type="checkbox"],input[type="radio"],label')]
+      let matches = [...document.querySelectorAll('button,[role="button"],[role="menuitem"],[role="checkbox"],[role="radio"],input[type="checkbox"],input[type="radio"],label')]
         .filter(visible)
         .filter(enabled)
         .filter(element => labels.includes(norm(textFor(element))));
@@ -147,6 +147,64 @@ async function readFlowState(tabId) {
   return response.state;
 }
 
+async function readLaunchState(tabId, item) {
+  const response = await chrome.tabs.sendMessage(tabId, { type: "GET_META_LAUNCH_STATE", item });
+  if (!response?.ok) throw new Error(response?.error || "Meta launch state could not be read.");
+  return response.state;
+}
+
+async function waitForLaunchState(tabId, item, predicate, timeout, errorPrefix) {
+  const started = Date.now();
+  let state;
+  while (Date.now() - started < timeout) {
+    state = await readLaunchState(tabId, item);
+    if (predicate(state)) return state;
+    await new Promise(resolve => setTimeout(resolve, 250));
+  }
+  throw new Error(`${errorPrefix}; ${state?.summary || "Meta launch state unavailable"}`);
+}
+
+async function withActiveWorkflowTab(tabId, action) {
+  const workflow = await chrome.tabs.get(tabId);
+  const [previous] = await chrome.tabs.query({ active: true, windowId: workflow.windowId });
+  const shouldRestore = previous?.id && previous.id !== tabId;
+  try {
+    if (shouldRestore) {
+      await chrome.tabs.update(tabId, { active: true });
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    return await action();
+  } finally {
+    if (shouldRestore) {
+      try { await chrome.tabs.update(previous.id, { active: true }); } catch (_) {}
+    }
+  }
+}
+
+async function openMetaItemFromPlanner(tabId, item) {
+  await waitForLaunchState(tabId, item, state => state.plannerReady, 30000, "Meta Planner did not become ready");
+  await withActiveWorkflowTab(tabId, async () => {
+    if (item.type === "post") {
+      await trustedClick(tabId, { labels: ["Create post"], preferLast: false });
+    } else {
+      const menuLabel = item.type === "reel" ? "Create reel" : "Create Story";
+      await trustedClick(tabId, { labels: ["Create"], preferLast: false });
+      await waitForLaunchState(
+        tabId,
+        item,
+        state => item.type === "reel" ? state.reelMenuReady : state.storyMenuReady,
+        15000,
+        "Meta's Create dropdown did not open"
+      );
+      await trustedClick(tabId, { labels: [menuLabel], preferLast: false });
+    }
+    const opened = await chrome.tabs.sendMessage(tabId, { type: "WAIT_META_COMPOSER", item });
+    if (!opened?.ok || !opened.composerReady) {
+      throw new Error(opened?.error || `Meta did not open the ${item.type} composer.`);
+    }
+  });
+}
+
 async function waitForFlowState(tabId, predicate, timeout, errorPrefix) {
   const started = Date.now();
   let state;
@@ -196,6 +254,12 @@ async function foregroundTrustedNext(tabId, previousStage) {
 }
 
 async function reachTrustedScheduleStep(tabId, item) {
+  await waitForFlowState(
+    tabId,
+    state => state.online !== false,
+    60000,
+    "Meta is offline; waiting for the Internet connection to return"
+  );
   if (item.type !== "story") {
     await waitForFlowState(
       tabId,
@@ -483,8 +547,7 @@ async function scheduleItem(message) {
       await hardOpenWorkflow(tab.id, targetUrl);
     }
     try {
-      const opened = await chrome.tabs.sendMessage(tab.id, { type: "OPEN_META_ITEM", item: message.item });
-      if (!opened?.ok) throw new Error(opened?.error || "Meta composer was not ready.");
+      await openMetaItemFromPlanner(tab.id, message.item);
       await uploadCampaignFile(tab.id, message.item);
       prepared = await chrome.tabs.sendMessage(tab.id, { type: "PREPARE_META_ITEM", item: message.item });
       if (!prepared?.ok || (!prepared.captionReady && !prepared.captionOptional)) {
@@ -497,14 +560,17 @@ async function scheduleItem(message) {
     }
   }
   if (!prepared) throw lastUploadError || new Error("Meta upload did not prepare the item.");
-  if (prepared.captionReady) await trustedInsert(tab.id, message.item.caption);
-  await reachTrustedScheduleStep(tab.id, message.item);
-  await trustedScheduleInput(tab.id, message.item.date, message.item.time);
-  const preflight = await chrome.tabs.sendMessage(tab.id, { type: "PREFLIGHT_META_ITEM", item: message.item });
-  if (!preflight?.ok || !preflight.ready) throw new Error(preflight?.error || "Meta schedule preflight failed.");
-  await trustedClick(tab.id, { labels: ["Schedule"], preferLast: true });
-  const finished = await chrome.tabs.sendMessage(tab.id, { type: "VERIFY_META_ITEM", item: message.item });
-  if (!finished?.ok || !finished.scheduled) throw new Error(finished?.error || "Meta did not confirm the scheduled item.");
+  let finished;
+  await withActiveWorkflowTab(tab.id, async () => {
+    if (prepared.captionReady) await trustedInsert(tab.id, message.item.caption);
+    await reachTrustedScheduleStep(tab.id, message.item);
+    await trustedScheduleInput(tab.id, message.item.date, message.item.time);
+    const preflight = await chrome.tabs.sendMessage(tab.id, { type: "PREFLIGHT_META_ITEM", item: message.item });
+    if (!preflight?.ok || !preflight.ready) throw new Error(preflight?.error || "Meta schedule preflight failed.");
+    await trustedClick(tab.id, { labels: ["Schedule"], preferLast: true });
+    finished = await chrome.tabs.sendMessage(tab.id, { type: "VERIFY_META_ITEM", item: message.item });
+    if (!finished?.ok || !finished.scheduled) throw new Error(finished?.error || "Meta did not confirm the scheduled item.");
+  });
   // The scheduled item is already committed at this point. Return the tab to
   // this item's exact clean start page, but never mark an already-confirmed
   // item failed if Meta temporarily resists that navigation.

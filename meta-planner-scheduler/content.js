@@ -63,28 +63,6 @@
       .find(element => norm(element.innerText || element.getAttribute("aria-label")) === norm(label));
   }
 
-  async function openCreateMenu() {
-    if (createMenuItem("Create reel") || createMenuItem("Create Story")) return;
-    const create = await waitFor(createMenuButton, 15000, 250, "the Create dropdown arrow next to Create post");
-    create.click();
-    await waitFor(() => createMenuItem("Create Story") || createMenuItem("Create reel"), 15000, 250, "the Create Story / Create reel dropdown menu");
-  }
-
-  async function openComposer(type) {
-    if (composerReady(type)) return;
-    if (!location.pathname.includes("content_calendar")) throw new Error("Open Meta Planner before starting the scheduler.");
-    if (type === "post") {
-      (await waitFor(() => exactControl("Create post"))).click();
-      await waitFor(() => [...document.querySelectorAll("h1,h2")].some(element => visible(element) && norm(element.innerText) === "create post"));
-    } else {
-      await openCreateMenu();
-      const label = type === "reel" ? "Create reel" : "Create Story";
-      (await waitFor(() => createMenuItem(label), 15000, 250, `${label} in Meta's Create dropdown menu`)).click();
-      await waitFor(() => composerReady(type), 45000, 300, `the ${type} composer controls`);
-    }
-    await sleep(700);
-  }
-
   function ensureFacebookAndInstagram() {
     const heading = [...document.querySelectorAll('[role="heading"],h1,h2,h3,h4')]
       .find(element => visible(element) && norm(element.innerText) === "post to");
@@ -285,6 +263,7 @@
         ? /create post/.test(rootText) && Boolean(postScheduleSwitch())
         : /create story/.test(rootText) && Boolean(scheduleChoice("story"));
     return {
+      online: navigator.onLine,
       captionRetained: item.type === "story" || composerText().includes(norm(item.caption)),
       nextReady: Boolean(enabledExactButton("Next")),
       stageKey: item.type === "reel" ? reelStageKey() : item.type,
@@ -334,12 +313,33 @@
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message.type === "PING") { sendResponse({ ok: true }); return; }
-    if (message.type === "OPEN_META_ITEM") {
+    if (message.type === "GET_META_LAUNCH_STATE") {
       (async () => {
-        active = { item: message.item, captionReady: false };
-        await openComposer(message.item.type);
+        const type = message.item?.type;
+        sendResponse({
+          ok: true,
+          state: {
+            plannerReady: location.pathname.includes("content_calendar")
+              && [...document.querySelectorAll("h1,h2")].some(element => visible(element) && norm(element.innerText) === "planner")
+              && Boolean(exactControl("Create post"))
+              && Boolean(createMenuButton()),
+            reelMenuReady: Boolean(createMenuItem("Create reel")),
+            storyMenuReady: Boolean(createMenuItem("Create Story")),
+            composerReady: Boolean(type && composerReady(type)),
+            summary: screenSummary()
+          }
+        });
+      })().catch(error => sendResponse({ ok: false, error: error.message }));
+      return true;
+    }
+    if (message.type === "WAIT_META_COMPOSER") {
+      (async () => {
+        const item = message.item;
+        if (!item?.type) throw new Error("Meta item type is missing.");
+        await waitFor(() => composerReady(item.type), 60000, 300, `the ${item.type} composer selected from Planner`);
         ensureFacebookAndInstagram();
-        sendResponse({ ok: true });
+        active = { item, captionReady: false };
+        sendResponse({ ok: true, composerReady: true });
       })().catch(error => sendResponse({ ok: false, error: error.message }));
       return true;
     }
