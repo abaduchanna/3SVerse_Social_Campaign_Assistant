@@ -182,7 +182,7 @@
   }
 
   function scheduleChoice() {
-    return [...document.querySelectorAll('[role="radio"],[role="checkbox"],input[type="radio"],input[type="checkbox"]')]
+    return [...document.querySelectorAll('button,[role="button"],[role="radio"],[role="checkbox"],input[type="radio"],input[type="checkbox"]')]
       .find(element => {
         if (!visible(element)) return false;
         const label = element.id ? document.querySelector(`label[for="${CSS.escape(element.id)}"]`) : element.closest("label");
@@ -191,7 +191,35 @@
   }
 
   function checked(element) {
-    return Boolean(element && (element.checked || element.getAttribute("aria-checked") === "true"));
+    return Boolean(element && (
+      element.checked
+      || element.getAttribute("aria-checked") === "true"
+      || element.getAttribute("aria-pressed") === "true"
+      || element.getAttribute("aria-selected") === "true"
+    ));
+  }
+
+  async function activateSchedule() {
+    if (document.querySelectorAll("input[placeholder='dd/mm/yyyy']").length >= 2) return true;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const option = scheduleChoice();
+      if (!option) throw new Error(`Meta's Schedule option was not found; ${screenSummary()}`);
+      option.scrollIntoView({ block: "center", inline: "center" });
+      option.focus({ preventScroll: true });
+      option.click();
+      try {
+        await waitFor(
+          () => document.querySelectorAll("input[placeholder='dd/mm/yyyy']").length >= 2,
+          5000,
+          200,
+          "Facebook and Instagram date fields"
+        );
+        return true;
+      } catch (_) {
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
+    }
+    throw new Error(`Meta did not activate the Schedule option; ${screenSummary()}`);
   }
 
   function flowState(item) {
@@ -276,6 +304,13 @@
       (async () => {
         if (!active) throw new Error("Meta scheduling state was lost. Retry this item.");
         sendResponse({ ok: true, state: flowState(active.item) });
+      })().catch(error => sendResponse({ ok: false, error: error.message }));
+      return true;
+    }
+    if (message.type === "ACTIVATE_META_SCHEDULE") {
+      (async () => {
+        await activateSchedule();
+        sendResponse({ ok: true, scheduleReady: true });
       })().catch(error => sendResponse({ ok: false, error: error.message }));
       return true;
     }

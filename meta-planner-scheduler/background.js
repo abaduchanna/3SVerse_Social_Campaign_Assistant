@@ -151,8 +151,10 @@ async function reachTrustedScheduleStep(tabId, item) {
   }
   state = await readFlowState(tabId);
   if (!state.scheduleSelected) {
-    await trustedClick(tabId, { labels: ["Schedule"], requireChecked: false });
-    await new Promise(resolve => setTimeout(resolve, 800));
+    const activated = await chrome.tabs.sendMessage(tabId, { type: "ACTIVATE_META_SCHEDULE" });
+    if (!activated?.ok || !activated.scheduleReady) {
+      throw new Error(activated?.error || "Meta's Schedule option did not activate.");
+    }
   }
   const ready = await chrome.tabs.sendMessage(tabId, { type: "WAIT_META_SCHEDULE_FIELDS" });
   if (!ready?.ok || !ready.scheduleReady) throw new Error(ready?.error || "Meta schedule controls were not ready.");
