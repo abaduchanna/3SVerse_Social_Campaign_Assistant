@@ -130,7 +130,7 @@
     return true;
   }
 
-  async function waitForCompletedUpload(fileName) {
+  async function waitForCompletedUpload(fileName, type) {
     const started = Date.now();
     let lastProgress = -1;
     let lastAdvance = started;
@@ -144,7 +144,10 @@
       }
       const previewReady = /safe to publish|no copyright issues|reels?\s*\u00b7\s*\d+\s*seconds?/i.test(text);
       const nextReady = Boolean(enabledExactButton("Next"));
-      if (nextReady && (progress >= 100 || previewReady || text.includes(fileName))) return true;
+      const postReady = Boolean(enabledExactButton("Publish"));
+      const storyReady = Boolean(enabledExactButton("Share"));
+      const actionReady = type === "reel" ? nextReady : type === "post" ? postReady : storyReady;
+      if (actionReady && (type !== "reel" || progress >= 100 || previewReady || text.includes(fileName))) return true;
       if (progress === 0 && Date.now() - lastAdvance > 45000) {
         throw new Error(`Meta upload for ${fileName} stayed at 0% for 45 seconds.`);
       }
@@ -181,7 +184,17 @@
       .find(element => visible(element) && /share to facebook story/i.test(element.getAttribute("aria-label") || ""));
   }
 
-  function scheduleChoice() {
+  function postScheduleSwitch() {
+    return [...document.querySelectorAll('[role="switch"],input[type="checkbox"]')]
+      .find(element => {
+        if (!visible(element)) return false;
+        const label = element.id ? document.querySelector(`label[for="${CSS.escape(element.id)}"]`) : element.closest("label");
+        return norm(element.innerText || element.getAttribute("aria-label") || label?.innerText) === "set date and time";
+      });
+  }
+
+  function scheduleChoice(type = active?.item?.type) {
+    if (type === "post") return postScheduleSwitch();
     return [...document.querySelectorAll('button,[role="button"],[role="radio"],[role="checkbox"],input[type="radio"],input[type="checkbox"]')]
       .find(element => {
         if (!visible(element)) return false;
@@ -202,7 +215,7 @@
   async function activateSchedule() {
     if (document.querySelectorAll("input[placeholder='dd/mm/yyyy']").length >= 2) return true;
     for (let attempt = 0; attempt < 3; attempt += 1) {
-      const option = scheduleChoice();
+      const option = scheduleChoice(active?.item?.type);
       if (!option) throw new Error(`Meta's Schedule option was not found; ${screenSummary()}`);
       option.scrollIntoView({ block: "center", inline: "center" });
       option.focus({ preventScroll: true });
@@ -225,11 +238,16 @@
   function flowState(item) {
     const rootText = norm(modalRoot().innerText);
     const story = storyShareSwitch();
-    const schedule = scheduleChoice();
+    const schedule = scheduleChoice(item.type);
+    const itemShareStep = item.type === "reel"
+      ? /scheduling options/.test(rootText)
+      : item.type === "post"
+        ? /create post/.test(rootText) && Boolean(postScheduleSwitch())
+        : /create story/.test(rootText) && Boolean(scheduleChoice("story"));
     return {
       captionRetained: item.type === "story" || composerText().includes(norm(item.caption)),
       nextReady: Boolean(enabledExactButton("Next")),
-      shareStep: /scheduling options/.test(rootText),
+      shareStep: itemShareStep,
       scheduleSelected: checked(schedule) || document.querySelectorAll("input[placeholder='dd/mm/yyyy']").length >= 2,
       storyAvailable: Boolean(story),
       storyOn: checked(story),
@@ -307,7 +325,7 @@
     if (message.type === "PREPARE_META_ITEM") {
       (async () => {
         if (!active) active = { item: message.item, captionReady: false };
-        await waitForCompletedUpload(message.item.file.name);
+        await waitForCompletedUpload(message.item.file.name, message.item.type);
         active.captionReady = await focusCaption(message.item.type);
         sendResponse({ ok: true, captionReady: active.captionReady, captionOptional: message.item.type === "story" });
       })().catch(error => sendResponse({ ok: false, error: error.message }));

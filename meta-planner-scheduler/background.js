@@ -112,23 +112,59 @@ async function readFlowState(tabId) {
   return response.state;
 }
 
+async function waitForFlowState(tabId, predicate, timeout, errorPrefix) {
+  const started = Date.now();
+  let state;
+  while (Date.now() - started < timeout) {
+    state = await readFlowState(tabId);
+    if (predicate(state)) return state;
+    await new Promise(resolve => setTimeout(resolve, 500));
+  }
+  throw new Error(`${errorPrefix}; ${state?.summary || "Meta state unavailable"}`);
+}
+
 async function reachTrustedScheduleStep(tabId, item) {
-  const initial = await readFlowState(tabId);
-  if (!initial.captionRetained && item.type !== "story") {
-    throw new Error("Meta did not retain the complete caption and hashtags.");
+  if (item.type !== "story") {
+    await waitForFlowState(
+      tabId,
+      state => state.captionRetained,
+      15000,
+      "Meta did not retain the complete caption and hashtags"
+    );
   }
-  for (let step = 0; step < 4; step += 1) {
-    const state = await readFlowState(tabId);
-    if (state.shareStep) break;
-    if (!state.nextReady) throw new Error(`Meta did not enable Next; ${state.summary}`);
-    await trustedClick(tabId, { labels: ["Next"], preferLast: true });
-    await new Promise(resolve => setTimeout(resolve, 1200));
+
+  if (item.type === "reel") {
+    const deadline = Date.now() + 180000;
+    let clickAttempts = 0;
+    let lastClick = 0;
+    let state;
+    while (Date.now() < deadline) {
+      state = await readFlowState(tabId);
+      if (state.shareStep) break;
+      if (state.nextReady && Date.now() - lastClick >= 2500 && clickAttempts < 12) {
+        await trustedClick(tabId, { labels: ["Next"], preferLast: true });
+        clickAttempts += 1;
+        lastClick = Date.now();
+      }
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    state = await readFlowState(tabId);
+    if (!state.shareStep) {
+      throw new Error(`Meta did not reach the Share/Scheduling step after ${clickAttempts} trusted Next attempts; ${state.summary}`);
+    }
+  } else {
+    await waitForFlowState(
+      tabId,
+      state => state.shareStep,
+      30000,
+      `Meta did not expose the ${item.type} scheduling controls`
+    );
   }
+
   let state = await readFlowState(tabId);
-  if (!state.shareStep) throw new Error(`Meta did not reach the Share/Scheduling step; ${state.summary}`);
   if (state.storyAvailable && !state.storyOn) {
     await trustedClick(tabId, { labels: ["Share to Facebook story"], requireChecked: false });
-    await new Promise(resolve => setTimeout(resolve, 500));
+    await waitForFlowState(tabId, current => current.storyOn, 10000, "Meta did not enable Facebook Story sharing");
   }
   state = await readFlowState(tabId);
   if (!state.scheduleSelected) {
