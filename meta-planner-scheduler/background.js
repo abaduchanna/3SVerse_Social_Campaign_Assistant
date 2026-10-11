@@ -33,20 +33,6 @@ function reelComposerUrl(plannerUrl) {
   return REEL_COMPOSER_URL;
 }
 
-async function waitReady(tabId, timeout = 90000) {
-  const current = await chrome.tabs.get(tabId);
-  if (current.status === "complete") return;
-  await new Promise((resolve, reject) => {
-    const timer = setTimeout(() => { chrome.tabs.onUpdated.removeListener(listener); reject(new Error("Meta Planner is still loading.")); }, timeout);
-    const listener = (id, info) => {
-      if (id === tabId && info.status === "complete") {
-        clearTimeout(timer); chrome.tabs.onUpdated.removeListener(listener); resolve();
-      }
-    };
-    chrome.tabs.onUpdated.addListener(listener);
-  });
-}
-
 async function ensureContent(tabId) {
   const started = Date.now();
   while (Date.now() - started < 30000) {
@@ -339,18 +325,11 @@ async function trustedScheduleInput(tabId, date, time) {
   }
 }
 
-async function reloadComposer(tabId) {
-  await chrome.tabs.reload(tabId);
-  await waitReady(tabId);
-  await ensureContent(tabId);
-  await new Promise(resolve => setTimeout(resolve, 1200));
-}
-
-async function hardOpenComposer(tabId, targetUrl) {
-  // Meta redirects a completed Reel workflow to its generic Create post SPA.
-  // A reload then reloads that wrong SPA state even when the address previously
-  // belonged to the Reel Composer. Pass through about:blank so every item gets
-  // a real document navigation to the exact Reel Composer URL.
+async function hardOpenWorkflow(tabId, targetUrl) {
+  // Meta keeps completed Reel/Post/Story flows inside its SPA. A reload can
+  // therefore reload the wrong composer even after chrome.tabs.update. Pass
+  // through about:blank so every item gets a real document navigation to its
+  // exact starting URL (Reel Composer or Planner).
   await chrome.tabs.update(tabId, { url: "about:blank", active: false });
   const blankStarted = Date.now();
   while (Date.now() - blankStarted < 15000) {
@@ -374,25 +353,20 @@ async function hardOpenComposer(tabId, targetUrl) {
     }
     await new Promise(resolve => setTimeout(resolve, 250));
   }
-  throw new Error("Meta did not open the exact Reel Composer link.");
+  throw new Error("Meta did not open the exact workflow link.");
 }
 
 async function scheduleItem(message) {
   const targetUrl = message.item.type === "reel" ? reelComposerUrl(message.plannerUrl) : message.plannerUrl;
   const tab = await workflowTab(targetUrl);
-  // Every queue item starts from the exact link used by the first reel. Meta's
-  // generic Create post redirect must never be reused for a Reel upload.
-  if (message.item.type === "reel") await hardOpenComposer(tab.id, targetUrl);
-  else {
-    await waitReady(tab.id);
-    await reloadComposer(tab.id);
-  }
+  // Reel starts at the verified Reel Composer. Post and Story start at the
+  // verified Planner. No item may reuse Meta's previous SPA composer state.
+  await hardOpenWorkflow(tab.id, targetUrl);
   let prepared;
   let lastUploadError;
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     if (attempt > 1) {
-      if (message.item.type === "reel") await hardOpenComposer(tab.id, targetUrl);
-      else await reloadComposer(tab.id);
+      await hardOpenWorkflow(tab.id, targetUrl);
     }
     try {
       const opened = await chrome.tabs.sendMessage(tab.id, { type: "OPEN_META_ITEM", item: message.item });
@@ -417,12 +391,11 @@ async function scheduleItem(message) {
   await trustedClick(tab.id, { labels: ["Schedule"], preferLast: true });
   const finished = await chrome.tabs.sendMessage(tab.id, { type: "VERIFY_META_ITEM", item: message.item });
   if (!finished?.ok || !finished.scheduled) throw new Error(finished?.error || "Meta did not confirm the scheduled item.");
-  if (message.item.type === "reel") {
-    // The scheduled item is already committed at this point. A temporary Meta
-    // navigation failure must not report it as failed and create a duplicate.
-    try { await hardOpenComposer(tab.id, targetUrl); }
-    catch (_) { await chrome.tabs.update(tab.id, { url: targetUrl, active: false }); }
-  }
+  // The scheduled item is already committed at this point. Return the tab to
+  // this item's exact clean start page, but never mark an already-confirmed
+  // item failed if Meta temporarily resists that navigation.
+  try { await hardOpenWorkflow(tab.id, targetUrl); }
+  catch (_) { await chrome.tabs.update(tab.id, { url: targetUrl, active: false }); }
   return finished;
 }
 
