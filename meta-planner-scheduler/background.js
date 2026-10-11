@@ -129,6 +129,32 @@ async function waitForFlowState(tabId, predicate, timeout, errorPrefix) {
   throw new Error(`${errorPrefix}; ${state?.summary || "Meta state unavailable"}`);
 }
 
+async function foregroundTrustedNext(tabId, previousStage) {
+  const workflow = await chrome.tabs.get(tabId);
+  const [previous] = await chrome.tabs.query({ active: true, windowId: workflow.windowId });
+  const shouldRestore = previous?.id && previous.id !== tabId;
+  try {
+    if (shouldRestore) {
+      await chrome.tabs.update(tabId, { active: true });
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    await trustedClick(tabId, { labels: ["Next"], preferLast: true });
+    // The browser event has already been delivered. Return the user's tab
+    // promptly while Meta completes its transition in the workflow tab.
+    await new Promise(resolve => setTimeout(resolve, 350));
+  } finally {
+    if (shouldRestore) {
+      try { await chrome.tabs.update(previous.id, { active: true }); } catch (_) {}
+    }
+  }
+  return waitForFlowState(
+    tabId,
+    current => current.shareStep || current.stageKey !== previousStage,
+    60000,
+    "Meta ignored the visible Next button even after a foreground browser click"
+  );
+}
+
 async function reachTrustedScheduleStep(tabId, item) {
   if (item.type !== "story") {
     await waitForFlowState(
@@ -143,20 +169,20 @@ async function reachTrustedScheduleStep(tabId, item) {
     let state = await readFlowState(tabId);
     let transitions = 0;
     while (!state.shareStep && transitions < 3) {
-      const advanced = await chrome.tabs.sendMessage(tabId, { type: "ACTIVATE_META_NEXT" });
-      if (!advanced?.ok) {
-        // Meta occasionally rejects programmatic DOM activation. The fallback
-        // is a real browser mouse event, now scrolled and hit-tested first.
-        await trustedClick(tabId, { labels: ["Next"], preferLast: true });
-        const previousStage = state.stageKey;
-        state = await waitForFlowState(
-          tabId,
-          current => current.shareStep || current.stageKey !== previousStage,
-          20000,
-          "Meta ignored the visible Next button"
-        );
+      const isEditStage = /create completed status/.test(state.stageKey || "")
+        && /edit pending status/.test(state.stageKey || "");
+      if (isEditStage) {
+        state = await foregroundTrustedNext(tabId, state.stageKey);
       } else {
-        state = advanced.state;
+        const advanced = await chrome.tabs.sendMessage(tabId, { type: "ACTIVATE_META_NEXT" });
+        if (advanced?.ok) {
+          state = advanced.state;
+        } else {
+        // The Edit step rejects synthetic DOM activation while its media tools
+        // are mounted. Briefly activate the Meta tab for a genuine browser
+        // click, restore the user's tab, then verify the stage actually moved.
+          state = await foregroundTrustedNext(tabId, state.stageKey);
+        }
       }
       transitions += 1;
     }
