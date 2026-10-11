@@ -254,10 +254,23 @@
 
   async function verifyScheduled() {
     await waitFor(() => {
-      const text = norm(document.body.innerText);
-      const composerGone = ![...document.querySelectorAll("h1,h2")].some(element => visible(element) && /^create (post|reel|story)$/i.test(element.innerText.trim()));
-      return composerGone || /scheduled|your (post|reel|story) is scheduled/.test(text);
-    }, 90000, 700);
+      const liveText = [...document.querySelectorAll('[role="alert"],[role="status"],[aria-live]')]
+        .filter(visible)
+        .map(element => element.innerText || element.textContent || "")
+        .join(" ");
+      const text = norm(`${liveText} ${document.body.innerText}`);
+      return [
+        /your (?:facebook |instagram )?(?:post|reel|story) (?:has been|is|was) scheduled/,
+        /(?:post|reel|story) (?:has been )?scheduled successfully/,
+        /(?:post|reel|story) scheduled\b/,
+        /successfully scheduled (?:your )?(?:post|reel|story)/,
+        /your (?:facebook |instagram )?(?:post|reel|story) (?:has been|is|was) published/,
+        /(?:post|reel|story) (?:has been )?published successfully/
+      ].some(pattern => pattern.test(text));
+    }, 180000, 500, "Meta's explicit scheduled/published confirmation");
+    // Keep the confirmed page untouched briefly so Meta can finish its own
+    // post-submit transition before the workflow tab is reused.
+    await sleep(5000);
   }
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {

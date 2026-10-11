@@ -1,4 +1,5 @@
 const PLANNER_MATCH = "https://business.facebook.com/*";
+const REEL_COMPOSER_URL = "https://business.facebook.com/latest/reels_composer/?asset_id=1376773818846890&business_id=4880742675547794&ref=biz_web_left_nav_create_reel&context_ref=CONTENT_CALENDAR";
 
 function withTimeout(promise, timeout, message) {
   let timer;
@@ -27,15 +28,9 @@ async function workflowTab(url) {
 }
 
 function reelComposerUrl(plannerUrl) {
-  const source = new URL(plannerUrl);
-  const target = new URL("https://business.facebook.com/latest/reels_composer/");
-  for (const key of ["asset_id", "business_id"]) {
-    const value = source.searchParams.get(key);
-    if (value) target.searchParams.set(key, value);
-  }
-  target.searchParams.set("ref", "biz_web_left_nav_create_reel");
-  target.searchParams.set("context_ref", "CONTENT_CALENDAR");
-  return target.href;
+  // This is the owner's verified starting link. Do not let Meta's post-submit
+  // Create-post redirect or a mutated Planner route become the next reel URL.
+  return REEL_COMPOSER_URL;
 }
 
 async function waitReady(tabId, timeout = 90000) {
