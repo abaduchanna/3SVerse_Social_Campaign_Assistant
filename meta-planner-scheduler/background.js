@@ -73,11 +73,24 @@ async function trustedClick(tabId, request) {
         }
         return element.closest("label")?.innerText || "";
       };
-      const labels = request.labels.map(norm);
-      let matches = [...document.querySelectorAll('button,[role="button"],[role="menuitem"],[role="checkbox"],[role="radio"],input[type="checkbox"],input[type="radio"],label')]
+      const allControls = [...document.querySelectorAll('button,[role="button"],[role="menuitem"],[role="checkbox"],[role="radio"],input[type="checkbox"],input[type="radio"],label')];
+      const createPost = allControls
         .filter(visible)
         .filter(enabled)
-        .filter(element => labels.includes(norm(textFor(element))));
+        .find(element => norm(textFor(element)) === "create post");
+      const createGroup = createPost?.closest('[role="group"]');
+      const exactAdjacentTarget = {
+        createPost,
+        createDropdown: createGroup?.querySelector('[role="button"][aria-haspopup="menu"]'),
+        createStory: [...document.querySelectorAll('[role="menuitem"]')].filter(visible).find(element => norm(textFor(element)) === "create story"),
+        createReel: [...document.querySelectorAll('[role="menuitem"]')].filter(visible).find(element => norm(textFor(element)) === "create reel"),
+        bulkUploadReels: [...document.querySelectorAll('[role="menuitem"]')].filter(visible).find(element => norm(textFor(element)) === "bulk upload reels"),
+        postReelAcrossPages: [...document.querySelectorAll('[role="menuitem"]')].filter(visible).find(element => norm(textFor(element)) === "post reel across pages")
+      }[request.target];
+      const labels = (request.labels || []).map(norm);
+      let matches = exactAdjacentTarget
+        ? [exactAdjacentTarget]
+        : allControls.filter(visible).filter(enabled).filter(element => labels.includes(norm(textFor(element))));
       if (request.requireChecked === true) matches = matches.filter(element => element.checked || element.getAttribute("aria-checked") === "true");
       if (request.requireChecked === false) matches = matches.filter(element => !(element.checked || element.getAttribute("aria-checked") === "true"));
       const element = request.preferLast ? matches.at(-1) : matches[0];
@@ -94,7 +107,7 @@ async function trustedClick(tabId, request) {
     const located = await chrome.debugger.sendCommand(target, "Runtime.evaluate", { expression, returnByValue: true });
     const point = located?.result?.value;
     if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) {
-      throw new Error(`Meta control was not found: ${request.labels.join(" / ")}`);
+      throw new Error(`Meta control was not found: ${request.target || (request.labels || []).join(" / ")}`);
     }
     await chrome.debugger.sendCommand(target, "Input.dispatchMouseEvent", { type: "mouseMoved", x: point.x, y: point.y });
     await chrome.debugger.sendCommand(target, "Input.dispatchMouseEvent", { type: "mousePressed", x: point.x, y: point.y, button: "left", clickCount: 1 });
@@ -185,10 +198,10 @@ async function openMetaItemFromPlanner(tabId, item) {
   await waitForLaunchState(tabId, item, state => state.plannerReady, 30000, "Meta Planner did not become ready");
   await withActiveWorkflowTab(tabId, async () => {
     if (item.type === "post") {
-      await trustedClick(tabId, { labels: ["Create post"], preferLast: false });
+      await trustedClick(tabId, { target: "createPost", preferLast: false });
     } else {
-      const menuLabel = item.type === "reel" ? "Create reel" : "Create Story";
-      await trustedClick(tabId, { labels: ["Create"], preferLast: false });
+      const menuTarget = item.type === "reel" ? "createReel" : "createStory";
+      await trustedClick(tabId, { target: "createDropdown", preferLast: false });
       await waitForLaunchState(
         tabId,
         item,
@@ -196,7 +209,7 @@ async function openMetaItemFromPlanner(tabId, item) {
         15000,
         "Meta's Create dropdown did not open"
       );
-      await trustedClick(tabId, { labels: [menuLabel], preferLast: false });
+      await trustedClick(tabId, { target: menuTarget, preferLast: false });
     }
     const opened = await chrome.tabs.sendMessage(tabId, { type: "WAIT_META_COMPOSER", item });
     if (!opened?.ok || !opened.composerReady) {

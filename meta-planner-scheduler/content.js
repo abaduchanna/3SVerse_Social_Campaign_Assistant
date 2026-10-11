@@ -50,11 +50,17 @@
     return [...document.querySelectorAll('[role="dialog"]')].filter(visible).at(-1) || document.body;
   }
 
+  function createPostButton() {
+    return controls().find(element => norm(element.innerText || element.getAttribute("aria-label")) === "create post");
+  }
+
+  function createSplitGroup() {
+    return createPostButton()?.closest('[role="group"]') || null;
+  }
+
   function createMenuButton() {
-    return [...document.querySelectorAll('button,[role="button"]')]
-      .filter(visible)
-      .find(element => norm(element.innerText || element.getAttribute("aria-label")) === "create"
-        && (element.getAttribute("aria-haspopup") === "menu" || element.getAttribute("aria-expanded") !== null));
+    const button = createSplitGroup()?.querySelector('[role="button"][aria-haspopup="menu"]');
+    return visible(button) ? button : null;
   }
 
   function createMenuItem(label) {
@@ -320,8 +326,7 @@
           ok: true,
           state: {
             plannerReady: location.pathname.includes("content_calendar")
-              && [...document.querySelectorAll("h1,h2")].some(element => visible(element) && norm(element.innerText) === "planner")
-              && Boolean(exactControl("Create post"))
+              && Boolean(createPostButton())
               && Boolean(createMenuButton()),
             reelMenuReady: Boolean(createMenuItem("Create reel")),
             storyMenuReady: Boolean(createMenuItem("Create Story")),
