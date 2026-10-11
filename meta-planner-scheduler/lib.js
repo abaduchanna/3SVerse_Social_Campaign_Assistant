@@ -37,7 +37,10 @@
     const queue = [];
     for (const entry of captions) {
       if (entry.day < startAtDay) continue;
-      const date = addDays(startDate, entry.day - 1);
+      // The selected start date belongs to the first queued campaign day.
+      // Resuming at Day 2 on October 11 must schedule Day 2 on October 11,
+      // not shift it to October 12 as though the date still belonged to Day 1.
+      const date = addDays(startDate, entry.day - startAtDay);
       const itemTime = entry.day === 1 && firstDayTime ? firstDayTime : time;
       if (selectedTypes.reel && mediaByDay.has(entry.day)) {
         queue.push({ ...entry, type: "reel", file: mediaByDay.get(entry.day), date, time: itemTime });

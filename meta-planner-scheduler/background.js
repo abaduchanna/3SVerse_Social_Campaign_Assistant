@@ -342,19 +342,25 @@ async function trustedScheduleInput(tabId, date, time) {
   }
 }
 
+async function reloadComposer(tabId) {
+  await chrome.tabs.reload(tabId);
+  await waitReady(tabId);
+  await ensureContent(tabId);
+  await new Promise(resolve => setTimeout(resolve, 1200));
+}
+
 async function scheduleItem(message) {
   const targetUrl = message.item.type === "reel" ? reelComposerUrl(message.plannerUrl) : message.plannerUrl;
   const tab = await workflowTab(targetUrl);
   await waitReady(tab.id);
-  await ensureContent(tab.id);
+  // Every queue item starts from a fresh Meta composer. Reusing the completed
+  // previous composer leaves the next item in a loading loop with no upload.
+  await reloadComposer(tab.id);
   let prepared;
   let lastUploadError;
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     if (attempt > 1) {
-      await chrome.tabs.update(tab.id, { url: targetUrl, active: false });
-      await waitReady(tab.id);
-      await ensureContent(tab.id);
-      await new Promise(resolve => setTimeout(resolve, 1200));
+      await reloadComposer(tab.id);
     }
     try {
       const opened = await chrome.tabs.sendMessage(tab.id, { type: "OPEN_META_ITEM", item: message.item });

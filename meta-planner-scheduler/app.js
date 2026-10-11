@@ -103,6 +103,9 @@ async function filePayload(file) {
 }
 
 async function start() {
+  // Read the live field values even when the operator types a day/date/time and
+  // immediately presses Start before the input's change event fires.
+  await rebuildQueue();
   if (!queue.length) throw new Error("The queue is empty. Link a campaign folder and check a content type.");
   stopped = false;
   $("#start").disabled = true;
