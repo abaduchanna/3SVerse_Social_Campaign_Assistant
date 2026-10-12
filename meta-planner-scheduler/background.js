@@ -590,7 +590,15 @@ async function scheduleItem(message) {
     }
     try {
       await openMetaItemFromPlanner(tab.id, message.item);
-      await uploadCampaignFile(tab.id, message.item);
+      if (message.item.type === "post") {
+        // Meta's Post composer opens its native photo chooser only from a
+        // foreground trusted click. Keep this tab active for the complete
+        // chooser interception and file attachment. Reel retains its proven
+        // existing upload path unchanged.
+        await withActiveWorkflowTab(tab.id, () => uploadCampaignFile(tab.id, message.item));
+      } else {
+        await uploadCampaignFile(tab.id, message.item);
+      }
       prepared = await chrome.tabs.sendMessage(tab.id, { type: "PREPARE_META_ITEM", item: message.item });
       if (!prepared?.ok || (!prepared.captionReady && !prepared.captionOptional)) {
         throw new Error(prepared?.error || "Meta composer was not ready for text.");
