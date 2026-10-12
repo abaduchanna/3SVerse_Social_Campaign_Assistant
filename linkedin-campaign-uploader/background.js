@@ -1,6 +1,7 @@
 const DASHBOARD_URL = "https://www.linkedin.com/company/144975022/admin/dashboard/";
 
 const sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
+const normalizeText = value => String(value || "").normalize("NFKC").replace(/\s+/g, " ").trim();
 chrome.action.onClicked.addListener(() => chrome.tabs.create({ url: chrome.runtime.getURL("app.html") }));
 
 async function workflowTab() {
@@ -90,11 +91,15 @@ async function trustedClick(tabId, name) {
   await withDebugger(tabId, debuggee => dispatchClick(debuggee, point));
 }
 
+async function focusTarget(tabId, name) {
+  const response = await chrome.tabs.sendMessage(tabId, { type: "FOCUS_LINKEDIN_TARGET", target: name });
+  if (!response?.ok) throw new Error(response?.error || `LinkedIn did not focus the ${name} field.`);
+}
+
 async function trustedReplaceText(tabId, name, text, commitKey) {
   await locate(tabId, name);
   await withDebugger(tabId, async debuggee => {
-    const focused = await chrome.tabs.sendMessage(tabId, { type: "FOCUS_LINKEDIN_TARGET", target: name });
-    if (!focused?.ok) throw new Error(`LinkedIn did not focus the ${name} field.`);
+    await focusTarget(tabId, name);
     await chrome.debugger.sendCommand(debuggee, "Input.dispatchKeyEvent", { type: "rawKeyDown", key: "a", code: "KeyA", modifiers: 2, windowsVirtualKeyCode: 65 });
     await chrome.debugger.sendCommand(debuggee, "Input.dispatchKeyEvent", { type: "keyUp", key: "a", code: "KeyA", modifiers: 2, windowsVirtualKeyCode: 65 });
     await chrome.debugger.sendCommand(debuggee, "Input.insertText", { text });
@@ -180,12 +185,15 @@ async function uploadFile(tabId, media) {
 }
 
 async function fillCaption(tabId, caption) {
-  await trustedClick(tabId, "editor");
+  await locate(tabId, "editor");
   await withDebugger(tabId, async debuggee => {
+    await focusTarget(tabId, "editor");
     await chrome.debugger.sendCommand(debuggee, "Input.dispatchKeyEvent", { type: "rawKeyDown", key: "a", code: "KeyA", modifiers: 2, windowsVirtualKeyCode: 65 });
     await chrome.debugger.sendCommand(debuggee, "Input.dispatchKeyEvent", { type: "keyUp", key: "a", code: "KeyA", modifiers: 2, windowsVirtualKeyCode: 65 });
     await chrome.debugger.sendCommand(debuggee, "Input.insertText", { text: caption });
   });
+  const expected = normalizeText(caption);
+  await waitForState(tabId, state => normalizeText(state.captionText) === expected, 15000, "LinkedIn did not retain the complete caption and hashtags");
 }
 
 function expectedSchedule(date, time) {

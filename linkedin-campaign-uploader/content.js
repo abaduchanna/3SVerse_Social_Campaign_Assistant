@@ -68,6 +68,12 @@
     } : { date: "", time: "" };
   }
 
+  function editorValue(found) {
+    const element = found?.element;
+    if (!element) return "";
+    return "value" in element ? element.value : (element.innerText || element.textContent || "");
+  }
+
   function pointFor(found) {
     const { element, frames } = found;
     for (const frame of frames) frame.scrollIntoView({ block: "center", inline: "center" });
@@ -105,6 +111,7 @@
       createReady: Boolean(create),
       startPostReady: Boolean(startPost),
       editorReady: Boolean(editor),
+      captionText: editorValue(editor),
       addMediaReady: Boolean(addMedia),
       nextReady: Boolean(next),
       postReady: Boolean(post),
