@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>3SVerse LinkedIn Campaign Uploader</title>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <header>
+    <div class="linkedinMark" aria-label="LinkedIn">in</div>
+    <div><h1>LinkedIn Campaign Uploader</h1><p>3S Verse company page · Images · Videos · Complete captions + hashtags</p></div>
+  </header>
+  <main>
+    <section class="card">
+      <h2>1. Link campaign folders</h2>
+      <label>Campaign folder 1<input id="folder1" type="file" webkitdirectory multiple></label>
+      <p id="folder1Summary" class="hint">Choose the folder containing the campaign Markdown, images, videos—or all of them.</p>
+      <label>Campaign folder 2 <span class="hint">(optional)</span><input id="folder2" type="file" webkitdirectory multiple></label>
+      <p id="folder2Summary" class="hint">Use this only when media is in a second folder.</p>
+      <details>
+        <summary>Windows folder paths</summary>
+        <label>Folder 1 path<input id="path1" type="text" value="C:\Users\AbadUmairChanna\Downloads\3SVerse_LinkedIn_Campaign_Oct_2026" spellcheck="false"></label>
+        <label>Folder 2 path<input id="path2" type="text" value="C:\Users\AbadUmairChanna\Downloads\3SVerse_30_Day_Social_Campaign_Bundle" spellcheck="false"></label>
+        <p class="hint">These paths let Chrome attach the selected local files to LinkedIn's native uploader.</p>
+      </details>
+    </section>
+
+    <section class="card grid">
+      <div>
+        <h2>2. Start point</h2>
+        <label>Start from campaign day<input id="startDay" type="number" min="1" max="999" value="1"></label>
+        <label>Delay between posts<input id="delay" type="number" min="5" max="600" value="12"> seconds</label>
+      </div>
+      <div>
+        <h2>3. Content types</h2>
+        <label class="check"><input id="imageType" type="checkbox" checked> LinkedIn image posts</label>
+        <label class="check"><input id="videoType" type="checkbox"> LinkedIn video posts</label>
+        <p class="hint">If both are checked and both files exist, two separate posts are created for that day.</p>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="row"><h2>Campaign queue</h2><strong id="queueCount">0 items</strong></div>
+      <div id="queue" class="queue"><p class="hint">Select one or two folders to build the queue.</p></div>
+    </section>
+
+    <section class="card actions">
+      <button id="openLinkedIn" class="secondary">Open LinkedIn Page</button>
+      <button id="start">Post complete queue</button>
+      <button id="stop" class="danger" disabled>Stop after current item</button>
+      <p id="status" role="status">Ready.</p>
+    </section>
+  </main>
+  <footer>v1.0.0 · 3SVerse · LinkedIn company-page campaign uploader</footer>
+  <script src="lib.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

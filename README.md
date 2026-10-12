@@ -1,5 +1,9 @@
 # 3SVerse Social Campaign Assistant
 
+## LinkedIn Campaign Uploader
+
+The separate `linkedin-campaign-uploader/` Chrome extension publishes day-matched image and video posts to the 3S Verse LinkedIn company page. It reads complete captions and hashtags from the campaign Markdown and uses LinkedIn's native uploader. Its LinkedIn icon keeps it visually separate from the Meta extension.
+
 This repository now contains three local-first Chrome extensions:
 
 - The root extension posts a campaign sequentially to Facebook groups joined by the signed-in account.

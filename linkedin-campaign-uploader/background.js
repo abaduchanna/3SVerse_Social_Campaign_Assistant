@@ -1,0 +1,173 @@
+const DASHBOARD_URL = "https://www.linkedin.com/company/144975022/admin/dashboard/";
+const PUBLISHED_URL = "https://www.linkedin.com/company/144975022/admin/page-posts/published/";
+
+const sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
+chrome.action.onClicked.addListener(() => chrome.tabs.create({ url: chrome.runtime.getURL("app.html") }));
+
+async function workflowTab() {
+  const stored = await chrome.storage.local.get("linkedinWorkflowTabId");
+  if (stored.linkedinWorkflowTabId) {
+    try {
+      const tab = await chrome.tabs.get(stored.linkedinWorkflowTabId);
+      if (/linkedin\.com/.test(tab.url || "")) return tab;
+    } catch (_) {}
+  }
+  const tab = await chrome.tabs.create({ url: DASHBOARD_URL, active: false });
+  await chrome.storage.local.set({ linkedinWorkflowTabId: tab.id });
+  return tab;
+}
+
+async function waitForTab(tabId, timeout = 60000) {
+  const started = Date.now();
+  while (Date.now() - started < timeout) {
+    const tab = await chrome.tabs.get(tabId);
+    if (tab.status === "complete") return tab;
+    await sleep(300);
+  }
+  throw new Error("LinkedIn did not finish loading in time.");
+}
+
+async function ensureContent(tabId) {
+  const started = Date.now();
+  while (Date.now() - started < 30000) {
+    try { if ((await chrome.tabs.sendMessage(tabId, { type: "PING" }))?.ok) return; } catch (_) {}
+    try { await chrome.scripting.executeScript({ target: { tabId }, files: ["content.js"] }); } catch (_) {}
+    await sleep(500);
+  }
+  throw new Error("LinkedIn loaded, but the uploader could not connect to the page.");
+}
+
+async function hardOpen(tabId, url) {
+  await chrome.tabs.update(tabId, { url: "about:blank", active: false });
+  await waitForTab(tabId, 15000);
+  await chrome.tabs.update(tabId, { url, active: false });
+  await waitForTab(tabId, 60000);
+  await ensureContent(tabId);
+}
+
+async function readState(tabId) {
+  const response = await chrome.tabs.sendMessage(tabId, { type: "GET_LINKEDIN_STATE" });
+  if (!response?.ok) throw new Error(response?.error || "LinkedIn page state could not be read.");
+  return response.state;
+}
+
+async function waitForState(tabId, predicate, timeout, description) {
+  const started = Date.now();
+  let state;
+  while (Date.now() - started < timeout) {
+    state = await readState(tabId);
+    if (predicate(state)) return state;
+    await sleep(400);
+  }
+  throw new Error(`${description}; ${state?.summary || "LinkedIn state unavailable"}`);
+}
+
+async function locate(tabId, name) {
+  const response = await chrome.tabs.sendMessage(tabId, { type: "LOCATE_LINKEDIN_TARGET", target: name });
+  if (!response?.ok) throw new Error(response?.error || `LinkedIn control not found: ${name}`);
+  return response.point;
+}
+
+async function withDebugger(tabId, action) {
+  const debuggee = { tabId };
+  let attached = false;
+  try {
+    await chrome.debugger.attach(debuggee, "1.3");
+    attached = true;
+    return await action(debuggee);
+  } finally {
+    if (attached) try { await chrome.debugger.detach(debuggee); } catch (_) {}
+  }
+}
+
+async function dispatchClick(debuggee, point) {
+  await chrome.debugger.sendCommand(debuggee, "Input.dispatchMouseEvent", { type: "mouseMoved", x: point.x, y: point.y });
+  await chrome.debugger.sendCommand(debuggee, "Input.dispatchMouseEvent", { type: "mousePressed", x: point.x, y: point.y, button: "left", clickCount: 1 });
+  await chrome.debugger.sendCommand(debuggee, "Input.dispatchMouseEvent", { type: "mouseReleased", x: point.x, y: point.y, button: "left", clickCount: 1 });
+}
+
+async function trustedClick(tabId, name) {
+  const point = await locate(tabId, name);
+  await withDebugger(tabId, debuggee => dispatchClick(debuggee, point));
+}
+
+async function foreground(tabId, action) {
+  const workflow = await chrome.tabs.get(tabId);
+  const [previous] = await chrome.tabs.query({ active: true, windowId: workflow.windowId });
+  const restore = previous?.id && previous.id !== tabId;
+  try {
+    if (restore) { await chrome.tabs.update(tabId, { active: true }); await sleep(500); }
+    return await action();
+  } finally {
+    if (restore) try { await chrome.tabs.update(previous.id, { active: true }); } catch (_) {}
+  }
+}
+
+async function uploadFile(tabId, media) {
+  try {
+    const response = await chrome.tabs.sendMessage(tabId, { type: "ATTACH_LINKEDIN_FILE", media });
+    if (response?.ok) return;
+  } catch (_) {}
+  const filePath = media.path;
+  if (!filePath) throw new Error("LinkedIn did not accept the selected folder file, and no optional Windows fallback path is available.");
+  const point = await locate(tabId, "addMedia");
+  await withDebugger(tabId, async debuggee => {
+    await chrome.debugger.sendCommand(debuggee, "Page.enable");
+    await chrome.debugger.sendCommand(debuggee, "DOM.enable");
+    await chrome.debugger.sendCommand(debuggee, "Page.setInterceptFileChooserDialog", { enabled: true });
+    const chooser = new Promise((resolve, reject) => {
+      const timer = setTimeout(() => { chrome.debugger.onEvent.removeListener(listener); reject(new Error("LinkedIn's native media chooser did not open within 20 seconds.")); }, 20000);
+      const listener = (source, method, params) => {
+        if (source.tabId !== tabId || method !== "Page.fileChooserOpened") return;
+        clearTimeout(timer);
+        chrome.debugger.onEvent.removeListener(listener);
+        resolve(params);
+      };
+      chrome.debugger.onEvent.addListener(listener);
+    });
+    await dispatchClick(debuggee, point);
+    const event = await chooser;
+    if (!event.backendNodeId) throw new Error("LinkedIn opened a file chooser without an upload input.");
+    await chrome.debugger.sendCommand(debuggee, "DOM.setFileInputFiles", { files: [filePath], backendNodeId: event.backendNodeId });
+    await chrome.debugger.sendCommand(debuggee, "Page.setInterceptFileChooserDialog", { enabled: false });
+  });
+}
+
+async function fillCaption(tabId, caption) {
+  await trustedClick(tabId, "editor");
+  await withDebugger(tabId, async debuggee => {
+    await chrome.debugger.sendCommand(debuggee, "Input.dispatchKeyEvent", { type: "rawKeyDown", key: "a", code: "KeyA", modifiers: 2, windowsVirtualKeyCode: 65 });
+    await chrome.debugger.sendCommand(debuggee, "Input.dispatchKeyEvent", { type: "keyUp", key: "a", code: "KeyA", modifiers: 2, windowsVirtualKeyCode: 65 });
+    await chrome.debugger.sendCommand(debuggee, "Input.insertText", { text: caption });
+  });
+}
+
+async function postItem(item) {
+  const tab = await workflowTab();
+  await hardOpen(tab.id, DASHBOARD_URL);
+  await waitForState(tab.id, state => state.createReady, 60000, "LinkedIn's Create control did not appear");
+  await foreground(tab.id, async () => {
+    await trustedClick(tab.id, "create");
+    await waitForState(tab.id, state => state.startPostReady, 30000, "LinkedIn's Start a post control did not appear");
+    await trustedClick(tab.id, "startPost");
+    await waitForState(tab.id, state => state.addMediaReady && state.editorReady, 30000, "LinkedIn's post composer did not become ready");
+    await uploadFile(tab.id, item.file);
+    await waitForState(tab.id, state => state.nextReady, item.type === "video" ? 600000 : 180000, `LinkedIn did not finish uploading ${item.file.name}`);
+    await trustedClick(tab.id, "next");
+    await waitForState(tab.id, state => state.editorReady && state.postReady, 60000, "LinkedIn's final post screen did not become ready");
+    await fillCaption(tab.id, item.caption);
+    await waitForState(tab.id, state => state.postReady, 15000, "LinkedIn's Post button is not enabled after adding the caption");
+    await trustedClick(tab.id, "post");
+    await waitForState(tab.id, state => state.successNotice || (!state.postReady && state.startPostReady), 180000, "LinkedIn did not confirm the published post");
+    await sleep(4000);
+  });
+  await chrome.tabs.update(tab.id, { url: PUBLISHED_URL, active: false });
+  await waitForTab(tab.id, 60000);
+  return true;
+}
+
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message.type !== "POST_LINKEDIN_ITEM") return;
+  postItem(message.item).then(() => sendResponse({ ok: true })).catch(error => sendResponse({ ok: false, error: error.message }));
+  return true;
+});
