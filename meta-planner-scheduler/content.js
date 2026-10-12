@@ -325,6 +325,7 @@
         .join(" ");
       const text = norm(`${liveText} ${document.body.innerText}`);
       return [
+        /you scheduled a (?:post|reel|story) through meta business suite/,
         /your (?:facebook |instagram )?(?:post|reel|story) (?:has been|is|was) scheduled/,
         /(?:post|reel|story) (?:has been )?scheduled successfully/,
         /(?:post|reel|story) scheduled\b/,

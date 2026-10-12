@@ -7,7 +7,7 @@ const background = fs.readFileSync(path.join(root, "background.js"), "utf8");
 const content = fs.readFileSync(path.join(root, "content.js"), "utf8");
 const manifest = JSON.parse(fs.readFileSync(path.join(root, "manifest.json"), "utf8"));
 
-assert.equal(manifest.version, "1.4.6");
+assert.equal(manifest.version, "1.4.7");
 assert.match(background, /function exactPostComposerUrl\(plannerUrl\)/);
 assert.match(background, /url\.pathname = "\/latest\/composer\/"/);
 assert.match(background, /itemType === "post"\s*\? exactPostComposerUrl\(message\.plannerUrl\)/);
@@ -35,5 +35,6 @@ assert.match(content, /\[role="heading"\],h1,h2,h3,h4/);
 assert.match(content, /\[contenteditable="true"\]\[role="combobox"\]/);
 assert.match(content, /ensureFacebookAndInstagram\(item\.type\)/);
 assert.match(content, /type === "story" \? "share to" : "post to"/);
+assert.match(content, /you scheduled a \(\?:post\|reel\|story\) through meta business suite/);
 
 process.stdout.write("meta scheduler trusted routing contract test passed\n");
