@@ -7,7 +7,7 @@ const background = fs.readFileSync(path.join(root, "background.js"), "utf8");
 const content = fs.readFileSync(path.join(root, "content.js"), "utf8");
 const manifest = JSON.parse(fs.readFileSync(path.join(root, "manifest.json"), "utf8"));
 
-assert.equal(manifest.version, "1.4.4");
+assert.equal(manifest.version, "1.4.5");
 assert.match(background, /function exactPostComposerUrl\(plannerUrl\)/);
 assert.match(background, /url\.pathname = "\/latest\/composer\/"/);
 assert.match(background, /itemType === "post"\s*\? exactPostComposerUrl\(message\.plannerUrl\)/);
@@ -16,6 +16,7 @@ assert.match(background, /state => state\.composerReady/);
 assert.match(background, /target: "createDropdown"/);
 assert.match(background, /item\.type === "reel" \? "createReel" : "createStory"/);
 assert.doesNotMatch(background, /trustedClick\(tabId, \{ target: "createPost"/);
+assert.equal((background.match(/photo\\\\\/video|photo\\\/video/g) || []).length, 2);
 assert.match(background, /createGroup\?\.querySelector\('\[role="button"\]\[aria-haspopup="menu"\]'\)/);
 assert.doesNotMatch(background, /labels: \["Create"\]/);
 assert.match(background, /type: "WAIT_META_COMPOSER"/);

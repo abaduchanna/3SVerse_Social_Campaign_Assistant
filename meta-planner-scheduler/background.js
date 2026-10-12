@@ -379,7 +379,7 @@ async function uploadNativeFile(tabId, filePath) {
         const visible = element => Boolean(element && element.getClientRects().length && getComputedStyle(element).visibility !== "hidden");
         const button = [...document.querySelectorAll('button,[role="button"],label')]
           .filter(visible)
-          .find(element => /^(add|upload) (video|photo|photos|media|photos\\/videos)$/.test(norm(element.innerText || element.getAttribute("aria-label"))));
+          .find(element => /^(add|upload) (video|photo|photos|media|photo\\/video|photos\\/videos)$/.test(norm(element.innerText || element.getAttribute("aria-label"))));
         if (!button) return null;
         const rect = button.getBoundingClientRect();
         return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, label: (button.innerText || button.getAttribute("aria-label") || "").trim() };
@@ -430,7 +430,7 @@ async function uploadCampaignFile(tabId, item) {
           const visible = element => Boolean(element && element.getClientRects().length && getComputedStyle(element).visibility !== "hidden");
           const upload = [...document.querySelectorAll('button,[role="button"],label')]
             .filter(visible)
-            .find(element => /^(add|upload) (video|photo|photos|media|photos\/videos)$/.test(norm(element.innerText || element.getAttribute("aria-label"))));
+            .find(element => /^(add|upload) (video|photo|photos|media|photo\/video|photos\/videos)$/.test(norm(element.innerText || element.getAttribute("aria-label"))));
           if (!upload) return { ok: false, error: "Meta's visible upload button was not found." };
 
           const file = new File([new Uint8Array(media.bytes)], media.name, { type: media.type || "application/octet-stream" });
