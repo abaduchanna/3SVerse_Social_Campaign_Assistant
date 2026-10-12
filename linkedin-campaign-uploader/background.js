@@ -90,6 +90,21 @@ async function trustedClick(tabId, name) {
   await withDebugger(tabId, debuggee => dispatchClick(debuggee, point));
 }
 
+async function trustedReplaceText(tabId, name, text, commitKey) {
+  const point = await locate(tabId, name);
+  await withDebugger(tabId, async debuggee => {
+    await dispatchClick(debuggee, point);
+    await chrome.debugger.sendCommand(debuggee, "Input.dispatchKeyEvent", { type: "rawKeyDown", key: "a", code: "KeyA", modifiers: 2, windowsVirtualKeyCode: 65 });
+    await chrome.debugger.sendCommand(debuggee, "Input.dispatchKeyEvent", { type: "keyUp", key: "a", code: "KeyA", modifiers: 2, windowsVirtualKeyCode: 65 });
+    await chrome.debugger.sendCommand(debuggee, "Input.insertText", { text });
+    const key = commitKey === "Enter" ? "Enter" : "Tab";
+    const code = commitKey === "Enter" ? "Enter" : "Tab";
+    const virtualKeyCode = commitKey === "Enter" ? 13 : 9;
+    await chrome.debugger.sendCommand(debuggee, "Input.dispatchKeyEvent", { type: "rawKeyDown", key, code, windowsVirtualKeyCode: virtualKeyCode, nativeVirtualKeyCode: virtualKeyCode });
+    await chrome.debugger.sendCommand(debuggee, "Input.dispatchKeyEvent", { type: "keyUp", key, code, windowsVirtualKeyCode: virtualKeyCode, nativeVirtualKeyCode: virtualKeyCode });
+  });
+}
+
 async function foreground(tabId, action) {
   const workflow = await chrome.tabs.get(tabId);
   const [previous] = await chrome.tabs.query({ active: true, windowId: workflow.windowId });
@@ -181,10 +196,11 @@ function expectedSchedule(date, time) {
 async function configureSchedule(tabId, item) {
   await trustedClick(tabId, "schedulePost");
   await waitForState(tabId, state => state.scheduleDialogReady, 30000, "LinkedIn's Schedule post dialog did not become ready");
-  const response = await chrome.tabs.sendMessage(tabId, { type: "SET_LINKEDIN_SCHEDULE", date: item.date, time: item.time });
-  if (!response?.ok) throw new Error(response?.error || "LinkedIn schedule date/time could not be set.");
   const wanted = expectedSchedule(item.date, item.time);
-  await waitForState(tabId, state => state.schedule.date === wanted.date && state.schedule.time.toLowerCase() === wanted.time.toLowerCase(), 15000, "LinkedIn did not retain the requested daily schedule");
+  await trustedReplaceText(tabId, "scheduleDate", wanted.date, "Tab");
+  await waitForState(tabId, state => state.schedule.date === wanted.date, 15000, "LinkedIn did not commit the requested schedule date");
+  await trustedReplaceText(tabId, "scheduleTime", wanted.time, "Enter");
+  await waitForState(tabId, state => state.scheduleDialogReady && state.schedule.date === wanted.date && state.schedule.time.toLowerCase() === wanted.time.toLowerCase(), 15000, "LinkedIn did not commit the requested schedule time or enable Next");
   await trustedClick(tabId, "scheduleNext");
   await waitForState(tabId, state => state.scheduleFinalReady, 30000, "LinkedIn's final Schedule button did not become ready");
 }
