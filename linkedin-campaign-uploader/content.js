@@ -83,50 +83,12 @@
     };
   }
 
-  async function attachFile(media) {
-    if (!Array.isArray(media?.bytes) || !media.bytes.length) throw new Error("The selected LinkedIn media bytes are unavailable.");
-    const file = new File([new Uint8Array(media.bytes)], media.name, { type: media.type });
-    const transfer = new DataTransfer();
-    transfer.items.add(file);
-    const accepts = input => {
-      const accept = norm(input.accept);
-      if (!accept) return true;
-      return media.type.startsWith("video/") ? accept.includes("video") : accept.includes("image") || accept.includes("photo");
-    };
-    const apply = input => {
-      try {
-        input.files = transfer.files;
-        input.dispatchEvent(new Event("input", { bubbles: true, composed: true }));
-        input.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
-        return input.files?.length === 1;
-      } catch (_) { return false; }
-    };
-    const started = Date.now();
-    let clicked = false;
-    while (Date.now() - started < 20000) {
-      for (const { doc } of documents()) {
-        const input = [...doc.querySelectorAll('input[type="file"]')].find(accepts);
-        if (input && apply(input)) return true;
-      }
-      if (!clicked) {
-        const add = target("addMedia")?.element;
-        if (add) { add.click(); clicked = true; }
-      }
-      await new Promise(resolve => setTimeout(resolve, 250));
-    }
-    throw new Error(`LinkedIn did not expose its file input; ${screenSummary()}`);
-  }
-
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message.type === "PING") { sendResponse({ ok: true }); return; }
     if (message.type === "GET_LINKEDIN_STATE") { sendResponse({ ok: true, state: state() }); return; }
     if (message.type === "LOCATE_LINKEDIN_TARGET") {
       const found = target(message.target);
       sendResponse(found ? { ok: true, point: pointFor(found) } : { ok: false, error: `LinkedIn control not found: ${message.target}; ${screenSummary()}` });
-    }
-    if (message.type === "ATTACH_LINKEDIN_FILE") {
-      attachFile(message.media).then(() => sendResponse({ ok: true })).catch(error => sendResponse({ ok: false, error: error.message }));
-      return true;
     }
   });
 })();

@@ -104,16 +104,11 @@ async function foreground(tabId, action) {
 }
 
 async function uploadFile(tabId, media) {
-  try {
-    const response = await chrome.tabs.sendMessage(tabId, { type: "ATTACH_LINKEDIN_FILE", media });
-    if (response?.ok) return;
-  } catch (_) {}
-  const filePath = media.path;
-  if (!filePath) throw new Error("LinkedIn did not accept the selected folder file, and no optional Windows fallback path is available.");
   const point = await locate(tabId, "addMedia");
   await withDebugger(tabId, async debuggee => {
     await chrome.debugger.sendCommand(debuggee, "Page.enable");
     await chrome.debugger.sendCommand(debuggee, "DOM.enable");
+    await chrome.debugger.sendCommand(debuggee, "Runtime.enable");
     await chrome.debugger.sendCommand(debuggee, "Page.setInterceptFileChooserDialog", { enabled: true });
     const chooser = new Promise((resolve, reject) => {
       const timer = setTimeout(() => { chrome.debugger.onEvent.removeListener(listener); reject(new Error("LinkedIn's native media chooser did not open within 20 seconds.")); }, 20000);
@@ -128,7 +123,40 @@ async function uploadFile(tabId, media) {
     await dispatchClick(debuggee, point);
     const event = await chooser;
     if (!event.backendNodeId) throw new Error("LinkedIn opened a file chooser without an upload input.");
-    await chrome.debugger.sendCommand(debuggee, "DOM.setFileInputFiles", { files: [filePath], backendNodeId: event.backendNodeId });
+    let attached = false;
+    if (Array.isArray(media.bytes) && media.bytes.length) {
+      const chunks = [];
+      for (let index = 0; index < media.bytes.length; index += 32768) {
+        chunks.push(String.fromCharCode(...media.bytes.slice(index, index + 32768)));
+      }
+      const resolved = await chrome.debugger.sendCommand(debuggee, "DOM.resolveNode", { backendNodeId: event.backendNodeId });
+      const objectId = resolved?.object?.objectId;
+      if (objectId) {
+        const injected = await chrome.debugger.sendCommand(debuggee, "Runtime.callFunctionOn", {
+          objectId,
+          functionDeclaration: `function(media) {
+            const binary = atob(media.base64);
+            const bytes = new Uint8Array(binary.length);
+            for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+            const transfer = new DataTransfer();
+            transfer.items.add(new File([bytes], media.name, { type: media.type }));
+            this.files = transfer.files;
+            this.dispatchEvent(new Event("input", { bubbles: true, composed: true }));
+            this.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
+            return this.files && this.files.length === 1;
+          }`,
+          arguments: [{ value: { name: media.name, type: media.type, base64: btoa(chunks.join("")) } }],
+          returnByValue: true,
+          awaitPromise: true
+        });
+        attached = injected?.result?.value === true && !injected?.exceptionDetails;
+      }
+    }
+    if (!attached && media.path) {
+      await chrome.debugger.sendCommand(debuggee, "DOM.setFileInputFiles", { files: [media.path], backendNodeId: event.backendNodeId });
+      attached = true;
+    }
+    if (!attached) throw new Error("LinkedIn's intercepted media input did not accept the selected folder file.");
     await chrome.debugger.sendCommand(debuggee, "Page.setInterceptFileChooserDialog", { enabled: false });
   });
 }

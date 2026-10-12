@@ -1,5 +1,7 @@
 # 3SVerse LinkedIn Campaign Uploader
 
+Version 1.0.1 intercepts LinkedIn's native file chooser. The selected campaign file is attached in the background without leaving a Windows Explorer popup open.
+
 Separate Chrome extension for the **3S Verse LinkedIn company page**. It does not modify the Meta Planner Scheduler.
 
 ## What it does
