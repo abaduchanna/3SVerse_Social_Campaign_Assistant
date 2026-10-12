@@ -23,19 +23,28 @@
     return entries.sort((a, b) => a.day - b.day);
   }
 
-  function buildQueue(captions, images, videos, selectedTypes, startAtDay = 1) {
+  function addDays(dateText, amount) {
+    const [year, month, day] = String(dateText).split("-").map(Number);
+    const date = new Date(year, month - 1, day, 12, 0, 0);
+    date.setDate(date.getDate() + amount);
+    const pad = value => String(value).padStart(2, "0");
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  }
+
+  function buildQueue(captions, images, videos, selectedTypes, startAtDay = 1, startDate = "", time = "09:00") {
     const imageByDay = new Map(images.map(file => [dayNumber(file.name), file]).filter(([day]) => day));
     const videoByDay = new Map(videos.map(file => [dayNumber(file.name), file]).filter(([day]) => day));
     const queue = [];
     for (const entry of captions) {
       if (entry.day < startAtDay) continue;
-      if (selectedTypes.image && imageByDay.has(entry.day)) queue.push({ ...entry, type: "image", file: imageByDay.get(entry.day) });
-      if (selectedTypes.video && videoByDay.has(entry.day)) queue.push({ ...entry, type: "video", file: videoByDay.get(entry.day) });
+      const type = selectedTypes.video ? "video" : "image";
+      const file = type === "video" ? videoByDay.get(entry.day) : imageByDay.get(entry.day);
+      if (file) queue.push({ ...entry, type, file, date: addDays(startDate, entry.day - startAtDay), time });
     }
     return queue;
   }
 
-  const api = { dayNumber, parseCampaign, buildQueue };
+  const api = { dayNumber, parseCampaign, addDays, buildQueue };
   root.LinkedInUploaderLib = api;
   if (typeof module !== "undefined") module.exports = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);

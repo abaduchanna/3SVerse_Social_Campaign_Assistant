@@ -28,31 +28,33 @@
 
     <section class="card grid">
       <div>
-        <h2>2. Start point</h2>
+        <h2>2. Daily schedule</h2>
         <label>Start from campaign day<input id="startDay" type="number" min="1" max="999" value="1"></label>
-        <label>Delay between posts<input id="delay" type="number" min="5" max="600" value="12"> seconds</label>
+        <label>Start date<input id="startDate" type="date"></label>
+        <label>Daily time<input id="time" type="time" value="09:00"></label>
+        <p class="hint">Each next campaign day is scheduled for the next calendar day.</p>
       </div>
       <div>
-        <h2>3. Content types</h2>
-        <label class="check"><input id="imageType" type="checkbox" checked> LinkedIn image posts</label>
-        <label class="check"><input id="videoType" type="checkbox"> LinkedIn video posts</label>
-        <p class="hint">If both are checked and both files exist, two separate posts are created for that day.</p>
+        <h2>3. Media type</h2>
+        <label class="check"><input id="imageType" name="mediaType" type="radio" checked> Use daily campaign images</label>
+        <label class="check"><input id="videoType" name="mediaType" type="radio"> Use daily campaign videos</label>
+        <p class="hint">Only one media post is scheduled per campaign day.</p>
       </div>
     </section>
 
     <section class="card">
-      <div class="row"><h2>Campaign queue</h2><strong id="queueCount">0 items</strong></div>
-      <div id="queue" class="queue"><p class="hint">Select one or two folders to build the queue.</p></div>
+      <div class="row"><h2>Daily scheduled posts</h2><strong id="queueCount">0 posts ready</strong></div>
+      <div id="queue" class="queue"><p class="hint">Select one or two folders to preview the daily schedule.</p></div>
     </section>
 
     <section class="card actions">
       <button id="openLinkedIn" class="secondary">Open LinkedIn Page</button>
-      <button id="start">Post complete queue</button>
-      <button id="stop" class="danger" disabled>Stop after current item</button>
+      <button id="start">Schedule all daily posts</button>
+      <button id="stop" class="danger" disabled>Stop after current post</button>
       <p id="status" role="status">Ready.</p>
     </section>
   </main>
-  <footer>v1.0.1 · 3SVerse · LinkedIn company-page campaign uploader</footer>
+  <footer>v1.1.0 · 3SVerse · LinkedIn company-page daily scheduler</footer>
   <script src="lib.js"></script>
   <script src="app.js"></script>
 </body>

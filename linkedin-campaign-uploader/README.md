@@ -1,6 +1,6 @@
 # 3SVerse LinkedIn Campaign Uploader
 
-Version 1.0.1 intercepts LinkedIn's native file chooser. The selected campaign file is attached in the background without leaving a Windows Explorer popup open.
+Version 1.1.0 schedules exactly one LinkedIn company-page post per campaign day. It uses LinkedIn's composer-level **Schedule post** dialog; it does not claim LinkedIn has a separate Planner or queue. The native file chooser remains intercepted, so no Windows Explorer popup is left open.
 
 Separate Chrome extension for the **3S Verse LinkedIn company page**. It does not modify the Meta Planner Scheduler.
 
@@ -9,10 +9,10 @@ Separate Chrome extension for the **3S Verse LinkedIn company page**. It does no
 - Links one campaign folder, or two when captions and media are split.
 - Reads complete `## Day N` captions and keeps their hashtags on separate lines.
 - Matches `day-10.png` and `3SVerse-Reel-10.mp4` to Day 10.
-- Supports image posts, video posts, or both.
-- Uses the recorded LinkedIn company-page route and exact controls: **Create → Start a post → Add media → Next → Text editor → Post**.
-- Waits for LinkedIn to complete media upload and to close/confirm the composer before moving to the next queue item.
-- Opens the Published posts page after every successful item.
+- Selects either the daily campaign images or the daily campaign videos, producing one post per Day entry—not duplicate image and video posts.
+- Uses the inspected LinkedIn company-page route and exact controls: **Create → Start a post → Add media → Next → Text editor → Schedule post → Date/Time → Next → Schedule**.
+- Day 1 uses the selected start date/time, Day 2 uses the next date at the same time, and so on.
+- Waits for LinkedIn to confirm each scheduled post before preparing the next campaign day.
 
 ## Install
 
@@ -26,9 +26,10 @@ Separate Chrome extension for the **3S Verse LinkedIn company page**. It does no
 
 1. Click the LinkedIn extension icon.
 2. Link the folder containing the campaign Markdown and images. Link the second folder only when videos are separate.
-3. Select Image posts and/or Video posts.
-4. Select the starting campaign day and click **Post complete queue**.
+3. Select daily campaign Images or Videos.
+4. Select the starting campaign day, start date, and daily time.
+5. Click **Schedule all daily posts**.
 
 The linked folder is the normal upload source. Windows paths are optional fallbacks only.
 
-The extension publishes immediately because the supplied, verified LinkedIn flow ends at **Post**. It does not invent a scheduling flow that was not recorded.
+The extension uses LinkedIn's live-inspected `Schedule post` fields (`Date`, `Time`, `Next`) and final `Schedule` action.

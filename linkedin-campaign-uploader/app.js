@@ -5,6 +5,13 @@ const sourceForFile = new WeakMap();
 let queue = [];
 let stopped = false;
 
+function tomorrow() {
+  const date = new Date();
+  date.setDate(date.getDate() + 1);
+  const pad = value => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
 function selectedFiles() {
   const seen = new Map();
   for (const input of [$("#folder1"), $("#folder2")]) {
@@ -39,9 +46,9 @@ async function rebuildQueue() {
     queue = LinkedInUploaderLib.buildQueue(captions, images, videos, {
       image: $("#imageType").checked,
       video: $("#videoType").checked
-    }, Math.max(1, Number($("#startDay").value) || 1));
+    }, Math.max(1, Number($("#startDay").value) || 1), $("#startDate").value, $("#time").value);
     renderQueue();
-    setStatus(`Matched ${captions.length} captions, ${images.length} images and ${videos.length} videos. Queue: ${queue.length}.`);
+    setStatus(`Matched ${captions.length} captions, ${images.length} images and ${videos.length} videos. ${queue.length} posts ready.`);
   } catch (error) {
     queue = [];
     renderQueue();
@@ -50,8 +57,8 @@ async function rebuildQueue() {
 }
 
 function renderQueue() {
-  $("#queueCount").textContent = `${queue.length} items`;
-  $("#queue").innerHTML = queue.length ? queue.map(item => `<div class="queueItem"><span>Day ${item.day}</span><span>${item.heading}</span><span>${item.type.toUpperCase()}</span><span>${item.file.name}</span></div>`).join("") : '<p class="hint">Select one or two folders to build the queue.</p>';
+  $("#queueCount").textContent = `${queue.length} posts ready`;
+  $("#queue").innerHTML = queue.length ? queue.map(item => `<div class="queueItem"><span>Day ${item.day}</span><span>${item.heading}</span><span>${item.type.toUpperCase()}</span><span>${item.date} ${item.time}</span></div>`).join("") : '<p class="hint">Select one or two folders to preview the daily schedule.</p>';
 }
 
 async function filePayload(file) {
@@ -72,25 +79,29 @@ async function filePayload(file) {
 
 async function start() {
   await rebuildQueue();
-  if (!queue.length) throw new Error("The queue is empty. Link a campaign folder and select Image and/or Video posts.");
+  if (!queue.length) throw new Error("No matched posts are ready. Link a campaign folder and select daily Images or Videos.");
+  const firstSchedule = new Date(`${queue[0].date}T${queue[0].time}:00`);
+  if (!Number.isFinite(firstSchedule.getTime()) || firstSchedule.getTime() <= Date.now() + 10 * 60 * 1000) {
+    throw new Error("Choose a start date/time at least 10 minutes in the future.");
+  }
   stopped = false;
   $("#start").disabled = true;
   $("#stop").disabled = false;
   for (let index = 0; index < queue.length; index += 1) {
     if (stopped) break;
     const item = queue[index];
-    setStatus(`Posting ${index + 1} of ${queue.length}: Day ${item.day} ${item.type}…`);
+    setStatus(`Scheduling ${index + 1} of ${queue.length}: Day ${item.day} for ${item.date} ${item.time}…`);
     const response = await chrome.runtime.sendMessage({ type: "POST_LINKEDIN_ITEM", item: { ...item, file: await filePayload(item.file) } });
     if (!response?.ok) throw new Error(`Day ${item.day} ${item.type}: ${response?.error || "LinkedIn posting failed."}`);
-    setStatus(`Posted ${index + 1} of ${queue.length}: Day ${item.day} ${item.type}.`);
-    if (index < queue.length - 1 && !stopped) await new Promise(resolve => setTimeout(resolve, Math.max(5, Number($("#delay").value) || 12) * 1000));
+    setStatus(`Scheduled ${index + 1} of ${queue.length}: Day ${item.day} for ${item.date} ${item.time}.`);
+    if (index < queue.length - 1 && !stopped) await new Promise(resolve => setTimeout(resolve, 3500));
   }
-  setStatus(stopped ? "Stopped after the current item." : `Complete: ${queue.length} LinkedIn posts published.`);
+  setStatus(stopped ? "Stopped after the current post." : `Complete: ${queue.length} daily LinkedIn posts scheduled.`);
   $("#start").disabled = false;
   $("#stop").disabled = true;
 }
 
-for (const selector of ["#folder1", "#folder2", "#startDay", "#imageType", "#videoType"]) $(selector).addEventListener("change", rebuildQueue);
+for (const selector of ["#folder1", "#folder2", "#startDay", "#startDate", "#time", "#imageType", "#videoType"]) $(selector).addEventListener("change", rebuildQueue);
 for (const number of [1, 2]) {
   $("#folder" + number).addEventListener("change", () => {
     const count = $("#folder" + number).files.length;
@@ -105,4 +116,5 @@ chrome.storage.local.get(["linkedinPath1", "linkedinPath2"]).then(result => {
   if (result.linkedinPath1) $("#path1").value = result.linkedinPath1;
   if (result.linkedinPath2) $("#path2").value = result.linkedinPath2;
 });
+$("#startDate").value = tomorrow();
 renderQueue();

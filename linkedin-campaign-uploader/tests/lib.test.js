@@ -1,5 +1,5 @@
 const assert = require("node:assert/strict");
-const { dayNumber, parseCampaign, buildQueue } = require("../lib.js");
+const { dayNumber, parseCampaign, addDays, buildQueue } = require("../lib.js");
 
 assert.equal(dayNumber("day-10.png"), 10);
 assert.equal(dayNumber("3SVerse-Reel-02.mp4"), 2);
@@ -24,6 +24,9 @@ assert.match(captions[1].caption, /#LinkedIn #WirelessRetail$/);
 
 const images = [{ name: "day-01.png" }, { name: "day-02.jpg" }];
 const videos = [{ name: "3SVerse-Reel-01.mp4" }, { name: "3SVerse-Reel-02.mp4" }];
-assert.deepEqual(buildQueue(captions, images, videos, { image: true, video: false }).map(item => `${item.day}:${item.type}`), ["1:image", "2:image"]);
-assert.deepEqual(buildQueue(captions, images, videos, { image: true, video: true }, 2).map(item => `${item.day}:${item.type}`), ["2:image", "2:video"]);
+assert.equal(addDays("2026-10-13", 2), "2026-10-15");
+const imageQueue = buildQueue(captions, images, videos, { image: true, video: false }, 1, "2026-10-13", "09:00");
+assert.deepEqual(imageQueue.map(item => `${item.day}:${item.type}:${item.date}:${item.time}`), ["1:image:2026-10-13:09:00", "2:image:2026-10-14:09:00"]);
+const videoQueue = buildQueue(captions, images, videos, { image: true, video: true }, 2, "2026-10-20", "10:30");
+assert.deepEqual(videoQueue.map(item => `${item.day}:${item.type}:${item.date}:${item.time}`), ["2:video:2026-10-20:10:30"]);
 console.log("LinkedIn campaign parser and queue tests passed.");

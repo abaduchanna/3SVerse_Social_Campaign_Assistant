@@ -1,5 +1,4 @@
 const DASHBOARD_URL = "https://www.linkedin.com/company/144975022/admin/dashboard/";
-const PUBLISHED_URL = "https://www.linkedin.com/company/144975022/admin/page-posts/published/";
 
 const sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 chrome.action.onClicked.addListener(() => chrome.tabs.create({ url: chrome.runtime.getURL("app.html") }));
@@ -170,6 +169,26 @@ async function fillCaption(tabId, caption) {
   });
 }
 
+function expectedSchedule(date, time) {
+  const [year, month, day] = date.split("-");
+  const [hours, minutes] = time.split(":").map(Number);
+  return {
+    date: `${month}/${day}/${year}`,
+    time: `${hours % 12 || 12}:${String(minutes).padStart(2, "0")} ${hours >= 12 ? "PM" : "AM"}`
+  };
+}
+
+async function configureSchedule(tabId, item) {
+  await trustedClick(tabId, "schedulePost");
+  await waitForState(tabId, state => state.scheduleDialogReady, 30000, "LinkedIn's Schedule post dialog did not become ready");
+  const response = await chrome.tabs.sendMessage(tabId, { type: "SET_LINKEDIN_SCHEDULE", date: item.date, time: item.time });
+  if (!response?.ok) throw new Error(response?.error || "LinkedIn schedule date/time could not be set.");
+  const wanted = expectedSchedule(item.date, item.time);
+  await waitForState(tabId, state => state.schedule.date === wanted.date && state.schedule.time.toLowerCase() === wanted.time.toLowerCase(), 15000, "LinkedIn did not retain the requested daily schedule");
+  await trustedClick(tabId, "scheduleNext");
+  await waitForState(tabId, state => state.scheduleFinalReady, 30000, "LinkedIn's final Schedule button did not become ready");
+}
+
 async function postItem(item) {
   const tab = await workflowTab();
   await hardOpen(tab.id, DASHBOARD_URL);
@@ -185,12 +204,11 @@ async function postItem(item) {
     await waitForState(tab.id, state => state.editorReady && state.postReady, 60000, "LinkedIn's final post screen did not become ready");
     await fillCaption(tab.id, item.caption);
     await waitForState(tab.id, state => state.postReady, 15000, "LinkedIn's Post button is not enabled after adding the caption");
-    await trustedClick(tab.id, "post");
-    await waitForState(tab.id, state => state.successNotice || (!state.postReady && state.startPostReady), 180000, "LinkedIn did not confirm the published post");
+    await configureSchedule(tab.id, item);
+    await trustedClick(tab.id, "scheduleFinal");
+    await waitForState(tab.id, state => state.successNotice || !state.composerOpen, 180000, "LinkedIn did not confirm the scheduled post");
     await sleep(4000);
   });
-  await chrome.tabs.update(tab.id, { url: PUBLISHED_URL, active: false });
-  await waitForTab(tab.id, 60000);
   return true;
 }
 
