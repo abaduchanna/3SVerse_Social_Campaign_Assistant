@@ -1,0 +1,31 @@
+(()=>{if(globalThis.__threeSVerseYouTubeUploader)return;globalThis.__threeSVerseYouTubeUploader=true;
+const norm=v=>String(v||"").normalize("NFKC").replace(/\s+/g," ").trim().toLowerCase();const visible=e=>Boolean(e&&e.getClientRects().length&&getComputedStyle(e).visibility!=="hidden");const enabled=e=>visible(e)&&!e.matches(":disabled,[disabled],[aria-disabled='true']");const text=e=>norm(e?.getAttribute("aria-label")||e?.innerText||e?.textContent);
+const all=s=>[...document.querySelectorAll(s)];const controls=()=>all("button,[role=button],a,[role=link],tp-yt-paper-item,ytcp-button,tp-yt-paper-radio-button").filter(visible);
+function exactControl(name){return controls().find(e=>enabled(e)&&text(e)===norm(name))}
+function currentChannel(){const candidates=["#entity-name","#channel-name","ytcp-entity-page-header-renderer #title","#account-name","ytd-active-account-header-renderer #channel-title"];for(const s of candidates){const e=document.querySelector(s);if(visible(e)&&text(e))return (e.innerText||e.textContent).trim()}const side=all("#entity-label-container,#channel-title,.account-name").find(visible);return side?(side.innerText||side.textContent).trim():""}
+function target(name,arg){
+ if(name==="avatar")return document.querySelector("button#avatar-btn")||all("button").find(e=>/account menu|account/.test(text(e)));
+ if(name==="switchAccount")return all("a,ytd-compact-link-renderer,tp-yt-paper-item").find(e=>visible(e)&&text(e).includes("switch account"));
+ if(name==="channel")return all("ytd-account-item-renderer,tp-yt-paper-item,a").find(e=>visible(e)&&norm(e.innerText||e.textContent)===norm(arg))||all("ytd-account-item-renderer,tp-yt-paper-item,a").find(e=>visible(e)&&norm(e.innerText||e.textContent).split("\n")[0]===norm(arg));
+ if(name==="create")return document.querySelector('button[aria-label="Create"]')||exactControl("Create");
+ if(name==="uploadVideo")return all("tp-yt-paper-item,[role=menuitem],button").find(e=>enabled(e)&&/upload video/.test(text(e)));
+ if(name==="fileInput")return all('input[type="file"]').find(e=>!e.disabled);
+ if(name==="title")return document.querySelector("#title-textarea div#textbox")||all('div#textbox[contenteditable="true"]').filter(visible)[0];
+ if(name==="description")return document.querySelector("#description-textarea div#textbox")||all('div#textbox[contenteditable="true"]').filter(visible)[1];
+ if(name==="showMore")return document.querySelector("ytcp-button#toggle-button")||controls().find(e=>enabled(e)&&text(e)==="show more");
+ if(name==="tags")return document.querySelector('input[aria-label="Tags"]');
+ if(name==="notKids")return document.querySelector('tp-yt-paper-radio-button[name="VIDEO_MADE_FOR_KIDS_NOT_MFK"]')||all("tp-yt-paper-radio-button").find(e=>/not made for kids/.test(text(e)));
+ if(name==="next")return document.querySelector("ytcp-button#next-button")||exactControl("Next");
+ if(name==="schedule")return document.querySelector('tp-yt-paper-radio-button[name="SCHEDULE"]')||all("tp-yt-paper-radio-button").find(e=>text(e)==="schedule");
+ if(name==="date")return all("ytcp-datepicker input,input").find(e=>visible(e)&&(/date/.test(norm(e.getAttribute("aria-label")))||/date/.test(norm(e.id))));
+ if(name==="time")return all("ytcp-time-of-day-picker input,input").find(e=>visible(e)&&(/time/.test(norm(e.getAttribute("aria-label")))||/time/.test(norm(e.id))));
+ if(name==="done")return document.querySelector("ytcp-button#done-button")||controls().find(e=>enabled(e)&&/^(schedule|publish|done)$/.test(text(e)));
+ if(name==="close")return document.querySelector("ytcp-button#close-button")||controls().find(e=>enabled(e)&&/^(close|done)$/.test(text(e)));
+ return null}
+function value(name){const e=target(name);return e?("value" in e?e.value:e.innerText||e.textContent||""):""}
+function summary(){return `url=${location.href}, channel=${currentChannel()||"unknown"}, controls=[${controls().map(text).filter(Boolean).slice(0,20).join(" | ")}]`}
+function state(){const body=norm(document.body.innerText);return{url:location.href,currentChannel:currentChannel(),avatarReady:Boolean(target("avatar")),switchReady:Boolean(target("switchAccount")),createReady:Boolean(target("create")),uploadVideoReady:Boolean(target("uploadVideo")),fileReady:Boolean(target("fileInput")),detailsReady:Boolean(target("title"))&&Boolean(target("description")),title:value("title"),description:value("description"),tags:value("tags"),nextReady:Boolean(target("next")&&enabled(target("next"))),scheduleReady:Boolean(target("schedule")),date:value("date"),time:value("time"),doneReady:Boolean(target("done")&&enabled(target("done"))),uploadComplete:/checks complete|upload complete|processing complete|finished processing/.test(body)&&!/uploading\s+\d{1,2}%/.test(body),success:/video (?:uploaded|scheduled|published)|upload complete/.test(body)&&Boolean(target("close")),summary:summary()}}
+function point(e){e.scrollIntoView({block:"center",inline:"center"});e.focus({preventScroll:true});const r=e.getBoundingClientRect();return{x:r.left+r.width/2,y:r.top+r.height/2}}
+function attach(media){const input=target("fileInput");if(!input)return{ok:false,error:`YouTube file input not found; ${summary()}`};const bytes=new Uint8Array(media.bytes),transfer=new DataTransfer();transfer.items.add(new File([bytes],media.name,{type:media.type}));input.files=transfer.files;input.dispatchEvent(new Event("input",{bubbles:true,composed:true}));input.dispatchEvent(new Event("change",{bubbles:true,composed:true}));return{ok:input.files.length===1}}
+chrome.runtime.onMessage.addListener((m,_s,send)=>{if(m.type==="PING")return send({ok:true});if(m.type==="GET_YOUTUBE_STATE")return send({ok:true,state:state()});if(m.type==="LOCATE_YOUTUBE_TARGET"){const e=target(m.target,m.arg);return send(e?{ok:true,point:point(e)}:{ok:false,error:`YouTube control not found: ${m.target}; ${summary()}`})}if(m.type==="FOCUS_YOUTUBE_TARGET"){const e=target(m.target,m.arg);if(!e)return send({ok:false,error:`YouTube control not found: ${m.target}; ${summary()}`});e.focus({preventScroll:true});return send({ok:document.activeElement===e})}if(m.type==="ATTACH_YOUTUBE_FILE")return send(attach(m.media))});
+})();
