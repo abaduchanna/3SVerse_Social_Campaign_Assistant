@@ -91,12 +91,14 @@ async function trustedClick(tabId, name) {
 }
 
 async function trustedReplaceText(tabId, name, text, commitKey) {
-  const point = await locate(tabId, name);
+  await locate(tabId, name);
   await withDebugger(tabId, async debuggee => {
-    await dispatchClick(debuggee, point);
+    const focused = await chrome.tabs.sendMessage(tabId, { type: "FOCUS_LINKEDIN_TARGET", target: name });
+    if (!focused?.ok) throw new Error(`LinkedIn did not focus the ${name} field.`);
     await chrome.debugger.sendCommand(debuggee, "Input.dispatchKeyEvent", { type: "rawKeyDown", key: "a", code: "KeyA", modifiers: 2, windowsVirtualKeyCode: 65 });
     await chrome.debugger.sendCommand(debuggee, "Input.dispatchKeyEvent", { type: "keyUp", key: "a", code: "KeyA", modifiers: 2, windowsVirtualKeyCode: 65 });
     await chrome.debugger.sendCommand(debuggee, "Input.insertText", { text });
+    if (commitKey === "Enter") await sleep(300);
     const keys = commitKey === "Enter"
       ? [{ key: "ArrowDown", code: "ArrowDown", virtualKeyCode: 40 }, { key: "Enter", code: "Enter", virtualKeyCode: 13 }]
       : [{ key: "Tab", code: "Tab", virtualKeyCode: 9 }];

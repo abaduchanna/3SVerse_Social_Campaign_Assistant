@@ -125,5 +125,11 @@
       const found = target(message.target);
       sendResponse(found ? { ok: true, point: pointFor(found) } : { ok: false, error: `LinkedIn control not found: ${message.target}; ${screenSummary()}` });
     }
+    if (message.type === "FOCUS_LINKEDIN_TARGET") {
+      const found = target(message.target);
+      if (!found) { sendResponse({ ok: false, error: `LinkedIn control not found: ${message.target}; ${screenSummary()}` }); return; }
+      found.element.focus({ preventScroll: true });
+      sendResponse({ ok: found.element.ownerDocument.activeElement === found.element });
+    }
   });
 })();
