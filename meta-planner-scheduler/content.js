@@ -8,10 +8,19 @@
   const visible = element => Boolean(element && element.getClientRects().length && getComputedStyle(element).visibility !== "hidden");
   const controls = () => [...document.querySelectorAll('button,[role="button"],[role="menuitem"],label')].filter(visible);
   const exactControl = text => controls().find(element => norm(element.innerText || element.getAttribute("aria-label")) === norm(text));
-  const routeFor = type => type === "reel" ? /\/reels_composer\/?$/ : type === "story" ? /\/stories\/composer\/?$/ : /\/content_calendar\/?$/;
+  const routeFor = type => type === "reel"
+    ? /\/reels_composer\/?$/
+    : type === "story"
+      ? /\/story_composer\/?$/
+      : /\/composer\/?$/;
+
+  function exactHeading(text) {
+    return [...document.querySelectorAll('[role="heading"],h1,h2,h3,h4')]
+      .find(element => visible(element) && norm(element.innerText || element.textContent) === norm(text));
+  }
 
   function captionEditor() {
-    return [...document.querySelectorAll('textarea,[contenteditable="true"][role="textbox"],input[type="text"]')]
+    return [...document.querySelectorAll('textarea,[contenteditable="true"][role="textbox"],[contenteditable="true"][role="combobox"],input[type="text"]')]
       .filter(visible)
       .find(element => /write in the dialogue box|write.*post|caption|describe/i.test(
         `${element.getAttribute("aria-label") || ""} ${element.placeholder || ""}`
@@ -26,8 +35,19 @@
         && Boolean(exactControl("Cancel"))
         && Boolean(exactControl("Next"));
     }
-    const heading = type === "story" ? "create story" : "create post";
-    return [...document.querySelectorAll("h1,h2")].some(element => visible(element) && norm(element.innerText) === heading);
+    if (type === "story") {
+      return routeFor(type).test(location.pathname)
+        && Boolean(exactHeading("Create Story"))
+        && Boolean(exactControl("Add photo/video"))
+        && Boolean(exactControl("Cancel"))
+        && Boolean(exactControl("Share"));
+    }
+    return routeFor(type).test(location.pathname)
+      && Boolean(exactHeading("Create post"))
+      && Boolean(exactControl("Add photo/video"))
+      && Boolean(captionEditor())
+      && Boolean(exactControl("Cancel"))
+      && Boolean(exactControl("Publish"));
   }
 
   function screenSummary() {
@@ -69,10 +89,11 @@
       .find(element => norm(element.innerText || element.getAttribute("aria-label")) === norm(label));
   }
 
-  function ensureFacebookAndInstagram() {
+  function ensureFacebookAndInstagram(type) {
+    const sectionName = type === "story" ? "share to" : "post to";
     const heading = [...document.querySelectorAll('[role="heading"],h1,h2,h3,h4')]
-      .find(element => visible(element) && norm(element.innerText) === "post to");
-    if (!heading) throw new Error("Meta's visible 'Post to' section was not found.");
+      .find(element => visible(element) && norm(element.innerText) === sectionName);
+    if (!heading) throw new Error(`Meta's visible '${type === "story" ? "Share to" : "Post to"}' section was not found.`);
 
     let selection = heading;
     while (selection && selection !== document.body) {
@@ -83,7 +104,7 @@
       selection = selection.parentElement;
     }
     if (!selection || selection === document.body) {
-      throw new Error("Facebook and Instagram are not both selected in Meta's 'Post to' control. Select both once, then retry.");
+      throw new Error(`Facebook and Instagram are not both selected in Meta's '${type === "story" ? "Share to" : "Post to"}' control. Select both once, then retry.`);
     }
   }
 
@@ -113,7 +134,7 @@
 
   async function focusCaption(type) {
     if (type === "story") return false;
-    const editor = await waitFor(captionEditor, 30000, 300, "Meta's reel caption box");
+    const editor = await waitFor(captionEditor, 30000, 300, "Meta's caption box");
     editor.focus();
     if (editor.isContentEditable) document.execCommand("selectAll", false);
     else {
@@ -342,7 +363,7 @@
         const item = message.item;
         if (!item?.type) throw new Error("Meta item type is missing.");
         await waitFor(() => composerReady(item.type), 60000, 300, `the ${item.type} composer selected from Planner`);
-        ensureFacebookAndInstagram();
+        ensureFacebookAndInstagram(item.type);
         active = { item, captionReady: false };
         sendResponse({ ok: true, composerReady: true });
       })().catch(error => sendResponse({ ok: false, error: error.message }));

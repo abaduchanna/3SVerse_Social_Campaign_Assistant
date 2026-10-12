@@ -7,7 +7,7 @@ const background = fs.readFileSync(path.join(root, "background.js"), "utf8");
 const content = fs.readFileSync(path.join(root, "content.js"), "utf8");
 const manifest = JSON.parse(fs.readFileSync(path.join(root, "manifest.json"), "utf8"));
 
-assert.equal(manifest.version, "1.4.2");
+assert.equal(manifest.version, "1.4.3");
 assert.match(background, /const targetUrl = message\.plannerUrl;/);
 assert.match(background, /target: "createPost"/);
 assert.match(background, /target: "createDropdown"/);
@@ -23,5 +23,11 @@ assert.match(content, /createPostButton\(\)\?\.closest\('\[role="group"\]'\)/);
 assert.match(content, /createSplitGroup\(\)\?\.querySelector\('\[role="button"\]\[aria-haspopup="menu"\]'\)/);
 assert.match(content, /message\.type === "WAIT_META_COMPOSER"/);
 assert.doesNotMatch(content, /message\.type === "OPEN_META_ITEM"/);
+assert.ok(content.includes('? /\\/story_composer\\/?$/'));
+assert.ok(content.includes(': /\\/composer\\/?$/'));
+assert.match(content, /\[role="heading"\],h1,h2,h3,h4/);
+assert.match(content, /\[contenteditable="true"\]\[role="combobox"\]/);
+assert.match(content, /ensureFacebookAndInstagram\(item\.type\)/);
+assert.match(content, /type === "story" \? "share to" : "post to"/);
 
 process.stdout.write("meta scheduler trusted routing contract test passed\n");
