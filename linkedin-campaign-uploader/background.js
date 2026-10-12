@@ -97,11 +97,13 @@ async function trustedReplaceText(tabId, name, text, commitKey) {
     await chrome.debugger.sendCommand(debuggee, "Input.dispatchKeyEvent", { type: "rawKeyDown", key: "a", code: "KeyA", modifiers: 2, windowsVirtualKeyCode: 65 });
     await chrome.debugger.sendCommand(debuggee, "Input.dispatchKeyEvent", { type: "keyUp", key: "a", code: "KeyA", modifiers: 2, windowsVirtualKeyCode: 65 });
     await chrome.debugger.sendCommand(debuggee, "Input.insertText", { text });
-    const key = commitKey === "Enter" ? "Enter" : "Tab";
-    const code = commitKey === "Enter" ? "Enter" : "Tab";
-    const virtualKeyCode = commitKey === "Enter" ? 13 : 9;
-    await chrome.debugger.sendCommand(debuggee, "Input.dispatchKeyEvent", { type: "rawKeyDown", key, code, windowsVirtualKeyCode: virtualKeyCode, nativeVirtualKeyCode: virtualKeyCode });
-    await chrome.debugger.sendCommand(debuggee, "Input.dispatchKeyEvent", { type: "keyUp", key, code, windowsVirtualKeyCode: virtualKeyCode, nativeVirtualKeyCode: virtualKeyCode });
+    const keys = commitKey === "Enter"
+      ? [{ key: "ArrowDown", code: "ArrowDown", virtualKeyCode: 40 }, { key: "Enter", code: "Enter", virtualKeyCode: 13 }]
+      : [{ key: "Tab", code: "Tab", virtualKeyCode: 9 }];
+    for (const { key, code, virtualKeyCode } of keys) {
+      await chrome.debugger.sendCommand(debuggee, "Input.dispatchKeyEvent", { type: "rawKeyDown", key, code, windowsVirtualKeyCode: virtualKeyCode, nativeVirtualKeyCode: virtualKeyCode });
+      await chrome.debugger.sendCommand(debuggee, "Input.dispatchKeyEvent", { type: "keyUp", key, code, windowsVirtualKeyCode: virtualKeyCode, nativeVirtualKeyCode: virtualKeyCode });
+    }
   });
 }
 

@@ -22,6 +22,7 @@ assert.doesNotMatch(appHtml, /Campaign queue|Post complete queue/i);
 assert.doesNotMatch(appJs, /Queue:/);
 assert.match(background, /trustedReplaceText/);
 assert.match(background, /Input\.insertText/);
+assert.match(background, /ArrowDown/);
 assert.doesNotMatch(background, /SET_LINKEDIN_SCHEDULE/);
 assert.doesNotMatch(content, /setNativeValue/);
 assert.match(background, /schedulePost/);
