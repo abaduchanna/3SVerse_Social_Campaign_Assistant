@@ -195,27 +195,49 @@ async function withActiveWorkflowTab(tabId, action) {
 }
 
 async function openMetaItemFromPlanner(tabId, item) {
+  if (item.type === "post") {
+    // Post uses Meta's exact standalone composer URL. The Planner control is a
+    // split button whose adjacent arrow opens the Reel/Story menu; coordinate
+    // clicks on that changing control can hit the arrow. Starting on the exact
+    // Post composer removes that ambiguity and must never touch the dropdown.
+    await waitForLaunchState(
+      tabId,
+      item,
+      state => state.composerReady,
+      30000,
+      "Meta's exact Create post composer did not become ready"
+    );
+    const opened = await chrome.tabs.sendMessage(tabId, { type: "WAIT_META_COMPOSER", item });
+    if (!opened?.ok || !opened.composerReady) {
+      throw new Error(opened?.error || "Meta did not open the post composer.");
+    }
+    return;
+  }
   await waitForLaunchState(tabId, item, state => state.plannerReady, 30000, "Meta Planner did not become ready");
   await withActiveWorkflowTab(tabId, async () => {
-    if (item.type === "post") {
-      await trustedClick(tabId, { target: "createPost", preferLast: false });
-    } else {
-      const menuTarget = item.type === "reel" ? "createReel" : "createStory";
-      await trustedClick(tabId, { target: "createDropdown", preferLast: false });
-      await waitForLaunchState(
-        tabId,
-        item,
-        state => item.type === "reel" ? state.reelMenuReady : state.storyMenuReady,
-        15000,
-        "Meta's Create dropdown did not open"
-      );
-      await trustedClick(tabId, { target: menuTarget, preferLast: false });
-    }
+    const menuTarget = item.type === "reel" ? "createReel" : "createStory";
+    await trustedClick(tabId, { target: "createDropdown", preferLast: false });
+    await waitForLaunchState(
+      tabId,
+      item,
+      state => item.type === "reel" ? state.reelMenuReady : state.storyMenuReady,
+      15000,
+      "Meta's Create dropdown did not open"
+    );
+    await trustedClick(tabId, { target: menuTarget, preferLast: false });
     const opened = await chrome.tabs.sendMessage(tabId, { type: "WAIT_META_COMPOSER", item });
     if (!opened?.ok || !opened.composerReady) {
       throw new Error(opened?.error || `Meta did not open the ${item.type} composer.`);
     }
   });
+}
+
+function exactPostComposerUrl(plannerUrl) {
+  const url = new URL(plannerUrl);
+  url.pathname = "/latest/composer/";
+  url.searchParams.set("ref", "biz_web_content_manager_calendar_view");
+  url.searchParams.set("context_ref", "CONTENT_CALENDAR");
+  return url.toString();
 }
 
 async function waitForFlowState(tabId, predicate, timeout, errorPrefix) {
@@ -547,9 +569,16 @@ async function hardOpenWorkflow(tabId, targetUrl) {
 }
 
 async function scheduleItem(message) {
-  // Every item starts from the verified Planner. Reel and Story must be chosen
-  // from the Create split-button menu; only a Post may use Create post.
-  const targetUrl = message.plannerUrl;
+  // Reel and Story retain the verified Planner flow. Post starts from Meta's
+  // exact standalone composer so its split-button arrow can never be hit.
+  const itemType = String(message.item?.type || "").trim().toLowerCase();
+  if (!["reel", "post", "story"].includes(itemType)) {
+    throw new Error(`Unsupported Meta item type: ${message.item?.type || "missing"}`);
+  }
+  message.item = { ...message.item, type: itemType };
+  const targetUrl = itemType === "post"
+    ? exactPostComposerUrl(message.plannerUrl)
+    : message.plannerUrl;
   const tab = await workflowTab(targetUrl);
   // No item may reuse Meta's previous SPA composer state.
   await hardOpenWorkflow(tab.id, targetUrl);
