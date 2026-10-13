@@ -230,9 +230,10 @@ async function postItem(item) {
     await waitForState(tab.id, state => state.nextReady, item.type === "video" ? 600000 : 180000, `LinkedIn did not finish uploading ${item.file.name}`);
     await trustedClick(tab.id, "next");
     await waitForState(tab.id, state => state.editorReady && state.postReady, 60000, "LinkedIn's final post screen did not become ready");
-    await fillCaption(tab.id, item.caption);
-    await waitForState(tab.id, state => state.postReady, 15000, "LinkedIn's Post button is not enabled after adding the caption");
     await configureSchedule(tab.id, item);
+    await waitForState(tab.id, state => state.editorReady && state.scheduleFinalReady, 30000, "LinkedIn's scheduled composer did not restore the caption editor");
+    await fillCaption(tab.id, item.caption);
+    await waitForState(tab.id, state => normalizeText(state.captionText) === normalizeText(item.caption) && state.scheduleFinalReady, 15000, "LinkedIn did not retain the caption and hashtags after schedule selection");
     await trustedClick(tab.id, "scheduleFinal");
     await waitForState(tab.id, state => state.successNotice || !state.composerOpen, 180000, "LinkedIn did not confirm the scheduled post");
     await sleep(4000);

@@ -1,6 +1,6 @@
 # 3SVerse LinkedIn Campaign Uploader
 
-Version 1.1.4 schedules exactly one LinkedIn company-page post per campaign day. The exact caption editor and date/time inputs are focus-locked before trusted keyboard entry. The bot verifies the complete caption and hashtags are retained before it can open scheduling. Date/time values are committed before `Next`, and the time suggestion is explicitly selected with Arrow Down + Enter so LinkedIn's summary and internal validation state both update. It uses LinkedIn's composer-level **Schedule post** dialog; it does not claim LinkedIn has a separate Planner or queue. The native file chooser remains intercepted, so no Windows Explorer popup is left open.
+Version 1.1.5 schedules exactly one LinkedIn company-page post per campaign day. It commits the schedule date/time first, returns to the scheduled composer, and only then inserts and verifies the complete caption and hashtags before the final Schedule click. This prevents LinkedIn from clearing text while schedule mode is being selected. The exact caption editor and date/time inputs are focus-locked before trusted keyboard entry. The time suggestion is explicitly selected with Arrow Down + Enter so LinkedIn's summary and internal validation state both update. It uses LinkedIn's composer-level **Schedule post** dialog; it does not claim LinkedIn has a separate Planner or queue. The native file chooser remains intercepted, so no Windows Explorer popup is left open.
 
 Separate Chrome extension for the **3S Verse LinkedIn company page**. It does not modify the Meta Planner Scheduler.
 
@@ -10,7 +10,7 @@ Separate Chrome extension for the **3S Verse LinkedIn company page**. It does no
 - Reads complete `## Day N` captions and keeps their hashtags on separate lines.
 - Matches `day-10.png` and `3SVerse-Reel-10.mp4` to Day 10.
 - Selects either the daily campaign images or the daily campaign videos, producing one post per Day entry—not duplicate image and video posts.
-- Uses the inspected LinkedIn company-page route and exact controls: **Create → Start a post → Add media → Next → Text editor → Schedule post → Date/Time → Next → Schedule**.
+- Uses the inspected LinkedIn company-page route and exact controls: **Create → Start a post → Add media → Next → Schedule post → Date/Time → Next → Text + hashtags → verify → final Schedule**.
 - Day 1 uses the selected start date/time, Day 2 uses the next date at the same time, and so on.
 - Waits for LinkedIn to confirm each scheduled post before preparing the next campaign day.
 
