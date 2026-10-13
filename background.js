@@ -121,6 +121,7 @@ async function insertCaptionWithDebugger(tabId, caption) {
   try {
     await chrome.debugger.attach(target, "1.3");
     attached = true;
+    try { await chrome.debugger.sendCommand(target, "Emulation.setFocusEmulationEnabled", { enabled: true }); } catch (_) {}
     await chrome.debugger.sendCommand(target, "Input.dispatchKeyEvent", {
       type: "keyDown", key: "a", code: "KeyA", modifiers: 2,
       windowsVirtualKeyCode: 65, nativeVirtualKeyCode: 65

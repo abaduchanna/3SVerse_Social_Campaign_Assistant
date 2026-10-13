@@ -74,6 +74,7 @@ async function withDebugger(tabId, action) {
   try {
     await chrome.debugger.attach(debuggee, "1.3");
     attached = true;
+    try { await chrome.debugger.sendCommand(debuggee, "Emulation.setFocusEmulationEnabled", { enabled: true }); } catch (_) {}
     return await action(debuggee);
   } finally {
     if (attached) try { await chrome.debugger.detach(debuggee); } catch (_) {}
@@ -115,15 +116,9 @@ async function trustedReplaceText(tabId, name, text, commitKey) {
 }
 
 async function foreground(tabId, action) {
-  const workflow = await chrome.tabs.get(tabId);
-  const [previous] = await chrome.tabs.query({ active: true, windowId: workflow.windowId });
-  const restore = previous?.id && previous.id !== tabId;
-  try {
-    if (restore) { await chrome.tabs.update(tabId, { active: true }); await sleep(500); }
-    return await action();
-  } finally {
-    if (restore) try { await chrome.tabs.update(previous.id, { active: true }); } catch (_) {}
-  }
+  // Every trusted CDP action enables focus emulation, so the workflow remains
+  // usable without stealing or depending on the operator's active tab.
+  return action();
 }
 
 async function uploadFile(tabId, media) {

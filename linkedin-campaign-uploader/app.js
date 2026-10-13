@@ -3,7 +3,10 @@ const DASHBOARD_URL = "https://www.linkedin.com/company/144975022/admin/dashboar
 const WINDOWS_SEPARATOR = "\\";
 const sourceForFile = new WeakMap();
 let queue = [];
+let displayQueue = [];
 let stopped = false;
+const PROGRESS_KEY = "linkedinScheduleProgressV1";
+let progress = {};
 
 function tomorrow() {
   const date = new Date();
@@ -36,6 +39,22 @@ function setStatus(message, error = false) {
   $("#status").style.color = error ? "#ff9a9a" : "#aab3d4";
 }
 
+function itemKey(item) {
+  return `${item.day}:${item.type}:${item.date}:${item.time}:${item.file?.name || ""}`;
+}
+
+function itemStatus(item) {
+  if (progress[itemKey(item)]?.status === "completed") return "completed";
+  if (item.skipped) return "skipped";
+  return progress[itemKey(item)]?.status || "pending";
+}
+
+async function setItemStatus(item, status, detail = "") {
+  progress[itemKey(item)] = { status, detail, updatedAt: new Date().toISOString() };
+  await chrome.storage.local.set({ [PROGRESS_KEY]: progress });
+  renderQueue();
+}
+
 async function rebuildQueue() {
   try {
     const files = selectedFiles();
@@ -43,22 +62,30 @@ async function rebuildQueue() {
     const captions = LinkedInUploaderLib.parseCampaign(await findMarkdown(files));
     const images = files.filter(file => /^image\//.test(file.type) || /\.(png|jpe?g|webp)$/i.test(file.name));
     const videos = files.filter(file => /^video\//.test(file.type) || /\.(mp4|mov|webm|m4v)$/i.test(file.name));
-    queue = LinkedInUploaderLib.buildQueue(captions, images, videos, {
+    const selectedTypes = {
       image: $("#imageType").checked,
       video: $("#videoType").checked
-    }, Math.max(1, Number($("#startDay").value) || 1), $("#startDate").value, $("#time").value);
+    };
+    const startDay = Math.max(1, Number($("#startDay").value) || 1);
+    queue = LinkedInUploaderLib.buildQueue(captions, images, videos, selectedTypes, startDay, $("#startDate").value, $("#time").value);
+    const campaignStartDate = LinkedInUploaderLib.addDays($("#startDate").value, 1 - startDay);
+    const previous = LinkedInUploaderLib.buildQueue(captions, images, videos, selectedTypes, 1, campaignStartDate, $("#time").value)
+      .filter(item => item.day < startDay)
+      .map(item => ({ ...item, skipped: true }));
+    displayQueue = [...previous, ...queue];
     renderQueue();
     setStatus(`Matched ${captions.length} captions, ${images.length} images and ${videos.length} videos. ${queue.length} posts ready.`);
   } catch (error) {
     queue = [];
+    displayQueue = [];
     renderQueue();
     setStatus(error.message, true);
   }
 }
 
 function renderQueue() {
-  $("#queueCount").textContent = `${queue.length} posts ready`;
-  $("#queue").innerHTML = queue.length ? queue.map(item => `<div class="queueItem"><span>Day ${item.day}</span><span>${item.heading}</span><span>${item.type.toUpperCase()}</span><span>${item.date} ${item.time}</span></div>`).join("") : '<p class="hint">Select one or two folders to preview the daily schedule.</p>';
+  $("#queueCount").textContent = `${displayQueue.length} posts · ${queue.length} scheduled from selected day`;
+  $("#queue").innerHTML = displayQueue.length ? displayQueue.map(item => `<div class="queueItem"><span>Day ${item.day}</span><span>${item.heading}</span><span>${item.type.toUpperCase()}</span><span>${item.date} ${item.time}</span><span class="queueStatus" data-status="${itemStatus(item)}">${itemStatus(item).toUpperCase()}</span></div>`).join("") : '<p class="hint">Select one or two folders to preview the daily schedule.</p>';
 }
 
 async function filePayload(file) {
@@ -90,9 +117,16 @@ async function start() {
   for (let index = 0; index < queue.length; index += 1) {
     if (stopped) break;
     const item = queue[index];
+    await setItemStatus(item, "running");
     setStatus(`Scheduling ${index + 1} of ${queue.length}: Day ${item.day} for ${item.date} ${item.time}…`);
-    const response = await chrome.runtime.sendMessage({ type: "POST_LINKEDIN_ITEM", item: { ...item, file: await filePayload(item.file) } });
-    if (!response?.ok) throw new Error(`Day ${item.day} ${item.type}: ${response?.error || "LinkedIn posting failed."}`);
+    try {
+      const response = await chrome.runtime.sendMessage({ type: "POST_LINKEDIN_ITEM", item: { ...item, file: await filePayload(item.file) } });
+      if (!response?.ok) throw new Error(response?.error || "LinkedIn posting failed.");
+    } catch (error) {
+      await setItemStatus(item, "failed", error.message);
+      throw new Error(`Day ${item.day} ${item.type}: ${error.message}`);
+    }
+    await setItemStatus(item, "completed");
     setStatus(`Scheduled ${index + 1} of ${queue.length}: Day ${item.day} for ${item.date} ${item.time}.`);
     if (index < queue.length - 1 && !stopped) await new Promise(resolve => setTimeout(resolve, 3500));
   }
@@ -112,9 +146,11 @@ for (const number of [1, 2]) {
 $("#openLinkedIn").addEventListener("click", () => chrome.tabs.create({ url: DASHBOARD_URL }));
 $("#start").addEventListener("click", () => start().catch(error => { $("#start").disabled = false; $("#stop").disabled = true; setStatus(error.message, true); }));
 $("#stop").addEventListener("click", () => { stopped = true; $("#stop").disabled = true; });
-chrome.storage.local.get(["linkedinPath1", "linkedinPath2"]).then(result => {
+chrome.storage.local.get(["linkedinPath1", "linkedinPath2", PROGRESS_KEY]).then(result => {
+  progress = result[PROGRESS_KEY] || {};
   if (result.linkedinPath1) $("#path1").value = result.linkedinPath1;
   if (result.linkedinPath2) $("#path2").value = result.linkedinPath2;
+  renderQueue();
 });
 $("#startDate").value = tomorrow();
 renderQueue();

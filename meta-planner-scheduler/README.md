@@ -2,6 +2,8 @@
 
 This Chrome extension is the Meta Business Suite companion inside the 3SVerse Social Campaign Assistant repository.
 
+Version 1.5.0 keeps per-item Pending, Running, Completed, Skipped and Failed status in local storage, labels earlier campaign days Skipped when starting from the middle, and enables trusted automation while the Meta tab is unfocused. The existing media upload paths are unchanged.
+
 ## Current live campaign workflow
 
 - Folder count is flexible: select one folder when it contains everything, or select a second optional folder when text/images/videos are split.

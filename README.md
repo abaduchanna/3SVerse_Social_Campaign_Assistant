@@ -1,14 +1,18 @@
-# 3SVerse Social Campaign Assistant
+# 3SVerse Facebook Group Posting
 
 ## LinkedIn Campaign Uploader
 
 The separate `linkedin-campaign-uploader/` Chrome extension publishes day-matched image and video posts to the 3S Verse LinkedIn company page. It reads complete captions and hashtags from the campaign Markdown and uses LinkedIn's native uploader. Its LinkedIn icon keeps it visually separate from the Meta extension.
 
-This repository now contains three local-first Chrome extensions:
+Version 1.2.0 renames the root extension to **Facebook Group Posting**, uses the Facebook icon, and keeps its trusted input reliable when the Facebook tab is not focused.
+
+This repository contains five local-first Chrome extensions:
 
 - The root extension posts a campaign sequentially to Facebook groups joined by the signed-in account.
 - [`meta-planner-scheduler/`](meta-planner-scheduler/) imports one or two local campaign folders and schedules Facebook + Instagram Reels, image posts, and Stories through Meta Business Suite Planner.
 - [`facebook-live-group-poster/`](facebook-live-group-poster/) imports Facebook **Your groups**, lets the operator save an exact checkbox selection, and posts one Facebook Live link with text and hashtags only to those saved destinations.
+- [`linkedin-campaign-uploader/`](linkedin-campaign-uploader/) schedules one day-matched image or video post per day on LinkedIn.
+- [`youtube-campaign-uploader/`](youtube-campaign-uploader/) schedules one day-matched video or Short per day on the verified 3S Verse channel.
 
 A local-first Chrome extension that imports every group joined by the Facebook account in your existing Chrome profile and posts a campaign to them sequentially.
 
@@ -33,7 +37,7 @@ A local-first Chrome extension that imports every group joined by the Facebook a
 2. Open `chrome://extensions`.
 3. Turn on **Developer mode**.
 4. Click **Load unpacked** and choose this folder.
-5. Pin **3SVerse Social Campaign Assistant**.
+5. Pin **3SVerse Facebook Group Posting**.
 6. Stay signed into Facebook in Chrome.
 
 ## Use

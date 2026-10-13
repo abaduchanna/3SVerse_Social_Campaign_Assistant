@@ -1,15 +1,15 @@
 {
   "manifest_version": 3,
-  "name": "3SVerse Social Campaign Assistant",
-  "version": "1.1.0",
-  "description": "Prepare reviewed Facebook group posts from your existing Chrome session.",
+  "name": "3SVerse Facebook Group Posting",
+  "version": "1.2.0",
+  "description": "Post text, images, and videos sequentially to joined Facebook groups from your existing Chrome session.",
   "permissions": ["storage", "tabs", "scripting", "alarms", "unlimitedStorage", "debugger"],
   "host_permissions": ["https://www.facebook.com/*", "https://m.facebook.com/*"],
   "background": {
     "service_worker": "background.js"
   },
   "action": {
-    "default_title": "3SVerse Campaign Assistant",
+    "default_title": "3SVerse Facebook Group Posting",
     "default_popup": "popup.html",
     "default_icon": {
       "16": "icons/icon-16.png",

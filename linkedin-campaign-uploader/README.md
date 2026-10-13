@@ -1,6 +1,6 @@
 # 3SVerse LinkedIn Campaign Uploader
 
-Version 1.1.5 schedules exactly one LinkedIn company-page post per campaign day. It commits the schedule date/time first, returns to the scheduled composer, and only then inserts and verifies the complete caption and hashtags before the final Schedule click. This prevents LinkedIn from clearing text while schedule mode is being selected. The exact caption editor and date/time inputs are focus-locked before trusted keyboard entry. The time suggestion is explicitly selected with Arrow Down + Enter so LinkedIn's summary and internal validation state both update. It uses LinkedIn's composer-level **Schedule post** dialog; it does not claim LinkedIn has a separate Planner or queue. The native file chooser remains intercepted, so no Windows Explorer popup is left open.
+Version 1.2.0 schedules exactly one LinkedIn company-page post per campaign day. It commits the schedule date/time first, returns to the scheduled composer, and only then inserts and verifies the complete caption and hashtags before the final Schedule click. It now keeps persistent per-day status, labels earlier campaign days Skipped when starting from the middle, and continues trusted automation while its tab is unfocused. The native file chooser remains intercepted, so no Windows Explorer popup is left open.
 
 Separate Chrome extension for the **3S Verse LinkedIn company page**. It does not modify the Meta Planner Scheduler.
 

@@ -7,7 +7,9 @@ const background = fs.readFileSync(path.join(root, "background.js"), "utf8");
 const content = fs.readFileSync(path.join(root, "content.js"), "utf8");
 const manifest = JSON.parse(fs.readFileSync(path.join(root, "manifest.json"), "utf8"));
 
-assert.equal(manifest.version, "1.4.7");
+assert.equal(manifest.version, "1.5.0");
+assert.match(background, /Emulation\.setFocusEmulationEnabled/);
+assert.match(fs.readFileSync(path.join(root, "app.js"), "utf8"), /metaScheduleProgressV1/);
 assert.match(background, /function exactPostComposerUrl\(plannerUrl\)/);
 assert.match(background, /url\.pathname = "\/latest\/composer\/"/);
 assert.match(background, /itemType === "post"\s*\? exactPostComposerUrl\(message\.plannerUrl\)/);

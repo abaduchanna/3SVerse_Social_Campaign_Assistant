@@ -46,6 +46,7 @@ async function trustedInsert(tabId, text) {
   try {
     await chrome.debugger.attach(target, "1.3");
     attached = true;
+    try { await chrome.debugger.sendCommand(target, "Emulation.setFocusEmulationEnabled", { enabled: true }); } catch (_) {}
     await chrome.debugger.sendCommand(target, "Input.insertText", { text });
   } finally {
     if (attached) try { await chrome.debugger.detach(target); } catch (_) {}
@@ -58,6 +59,7 @@ async function trustedClick(tabId, request) {
   try {
     await chrome.debugger.attach(target, "1.3");
     attached = true;
+    try { await chrome.debugger.sendCommand(target, "Emulation.setFocusEmulationEnabled", { enabled: true }); } catch (_) {}
     await chrome.debugger.sendCommand(target, "Runtime.enable");
     const expression = `(() => {
       const request = ${JSON.stringify(request)};
@@ -124,6 +126,7 @@ async function trustedKeyActivate(tabId, label) {
   try {
     await chrome.debugger.attach(target, "1.3");
     attached = true;
+    try { await chrome.debugger.sendCommand(target, "Emulation.setFocusEmulationEnabled", { enabled: true }); } catch (_) {}
     await chrome.debugger.sendCommand(target, "Runtime.enable");
     const focused = await chrome.debugger.sendCommand(target, "Runtime.evaluate", {
       expression: `(() => {
@@ -194,6 +197,13 @@ async function withActiveWorkflowTab(tabId, action) {
   }
 }
 
+// CDP focus emulation keeps React controls usable while the operator works in
+// another tab. Only Meta's proven native Post chooser retains the foreground
+// wrapper; normal composer navigation and scheduling stay background-safe.
+async function withUnfocusedWorkflowTab(_tabId, action) {
+  return action();
+}
+
 async function openMetaItemFromPlanner(tabId, item) {
   if (item.type === "post") {
     // Post uses Meta's exact standalone composer URL. The Planner control is a
@@ -214,7 +224,7 @@ async function openMetaItemFromPlanner(tabId, item) {
     return;
   }
   await waitForLaunchState(tabId, item, state => state.plannerReady, 30000, "Meta Planner did not become ready");
-  await withActiveWorkflowTab(tabId, async () => {
+  await withUnfocusedWorkflowTab(tabId, async () => {
     const menuTarget = item.type === "reel" ? "createReel" : "createStory";
     await trustedClick(tabId, { target: "createDropdown", preferLast: false });
     await waitForLaunchState(
@@ -252,39 +262,14 @@ async function waitForFlowState(tabId, predicate, timeout, errorPrefix) {
 }
 
 async function foregroundTrustedNext(tabId, previousStage) {
-  const workflow = await chrome.tabs.get(tabId);
-  const [previous] = await chrome.tabs.query({ active: true, windowId: workflow.windowId });
-  const shouldRestore = previous?.id && previous.id !== tabId;
+  // Focus emulation is enabled inside trustedClick/trustedKeyActivate, so the
+  // Edit → Share transition no longer depends on which tab the user is viewing.
+  await trustedClick(tabId, { labels: ["Next"], preferLast: true });
   try {
-    if (shouldRestore) {
-      await chrome.tabs.update(tabId, { active: true });
-      await new Promise(resolve => setTimeout(resolve, 500));
-    }
-    await trustedClick(tabId, { labels: ["Next"], preferLast: true });
-    try {
-      // Keep Meta active until its React editor commits the stage change.
-      // Restoring the scheduler tab after a fixed 350 ms interrupted this step.
-      return await waitForFlowState(
-        tabId,
-        current => current.shareStep || current.stageKey !== previousStage,
-        15000,
-        "Meta did not accept the Edit-stage mouse click"
-      );
-    } catch (_) {
-      // A focused trusted Enter is Meta's reliable accessibility activation
-      // when its media editor ignores pointer input.
-      await trustedKeyActivate(tabId, "Next");
-      return await waitForFlowState(
-        tabId,
-        current => current.shareStep || current.stageKey !== previousStage,
-        45000,
-        "Meta ignored both the Edit-stage mouse click and focused Enter"
-      );
-    }
-  } finally {
-    if (shouldRestore) {
-      try { await chrome.tabs.update(previous.id, { active: true }); } catch (_) {}
-    }
+    return await waitForFlowState(tabId, current => current.shareStep || current.stageKey !== previousStage, 15000, "Meta did not accept the Edit-stage mouse click");
+  } catch (_) {
+    await trustedKeyActivate(tabId, "Next");
+    return waitForFlowState(tabId, current => current.shareStep || current.stageKey !== previousStage, 45000, "Meta ignored both the Edit-stage mouse click and focused Enter");
   }
 }
 
@@ -361,6 +346,7 @@ async function uploadNativeFile(tabId, filePath) {
   try {
     await chrome.debugger.attach(target, "1.3");
     attached = true;
+    try { await chrome.debugger.sendCommand(target, "Emulation.setFocusEmulationEnabled", { enabled: true }); } catch (_) {}
     await chrome.debugger.sendCommand(target, "Page.enable");
     await chrome.debugger.sendCommand(target, "DOM.enable");
     await chrome.debugger.sendCommand(target, "Runtime.enable");
@@ -497,6 +483,7 @@ async function trustedScheduleInput(tabId, date, time) {
   try {
     await chrome.debugger.attach(target, "1.3");
     attached = true;
+    try { await chrome.debugger.sendCommand(target, "Emulation.setFocusEmulationEnabled", { enabled: true }); } catch (_) {}
     for (const [selector, index, value, mode] of entries) {
       const expression = `(() => { const e = [...document.querySelectorAll(${JSON.stringify(selector)})].filter(x => x.getClientRects().length)[${index}]; if (!e) return false; e.focus(); e.select(); return true; })()`;
       const focused = await chrome.debugger.sendCommand(target, "Runtime.evaluate", { expression, returnByValue: true });
@@ -611,7 +598,7 @@ async function scheduleItem(message) {
   }
   if (!prepared) throw lastUploadError || new Error("Meta upload did not prepare the item.");
   let finished;
-  await withActiveWorkflowTab(tab.id, async () => {
+  await withUnfocusedWorkflowTab(tab.id, async () => {
     if (prepared.captionReady) await trustedInsert(tab.id, message.item.caption);
     await reachTrustedScheduleStep(tab.id, message.item);
     await trustedScheduleInput(tab.id, message.item.date, message.item.time);

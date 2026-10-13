@@ -1,1 +1,34 @@
-const assert=require("node:assert/strict"),fs=require("node:fs"),path=require("node:path"),root=path.resolve(__dirname,"..");const bg=fs.readFileSync(path.join(root,"background.js"),"utf8"),content=fs.readFileSync(path.join(root,"content.js"),"utf8"),html=fs.readFileSync(path.join(root,"app.html"),"utf8");assert.match(content,/button#avatar-btn/);assert.match(content,/switch account/);assert.match(bg,/norm\(s\.currentChannel\)===norm\(wanted\)/);assert.match(bg,/Wrong YouTube channel is active/);assert.match(content,/input\[type="file"\]/);assert.match(content,/new File\(\[bytes\]/);assert.doesNotMatch(bg,/setInterceptFileChooserDialog/);assert.match(content,/#title-textarea div#textbox/);assert.match(content,/#description-textarea div#textbox/);assert.match(content,/VIDEO_MADE_FOR_KIDS_NOT_MFK/);assert.match(content,/ytcp-button#next-button/);assert.match(content,/name="SCHEDULE"/);assert.match(content,/ytcp-button#done-button/);assert.match(bg,/uploadComplete&&s\.doneReady/);assert.match(html,/Exact channel: 3S Verse/);console.log("YouTube routing contracts passed.");
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+
+const root = path.resolve(__dirname, "..");
+const bg = fs.readFileSync(path.join(root, "background.js"), "utf8");
+const content = fs.readFileSync(path.join(root, "content.js"), "utf8");
+const html = fs.readFileSync(path.join(root, "app.html"), "utf8");
+const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
+const manifest = JSON.parse(fs.readFileSync(path.join(root, "manifest.json"), "utf8"));
+
+assert.equal(manifest.version, "1.1.0");
+assert.match(bg, /Emulation\.setFocusEmulationEnabled/);
+assert.match(app, /youtubeScheduleProgressV1/);
+assert.match(app, /skipped: true/);
+assert.match(app, /setItemStatus\(item, "running"/);
+assert.match(app, /setItemStatus\(item, "completed"/);
+assert.match(app, /setItemStatus\(item, "failed"/);
+assert.match(content, /button#avatar-btn/);
+assert.match(content, /switch account/);
+assert.match(bg, /norm\(s\.currentChannel\)===norm\(wanted\)/);
+assert.match(bg, /Wrong YouTube channel is active/);
+assert.match(content, /input\[type="file"\]/);
+assert.match(content, /new File\(\[bytes\]/);
+assert.doesNotMatch(bg, /setInterceptFileChooserDialog/);
+assert.match(content, /#title-textarea div#textbox/);
+assert.match(content, /#description-textarea div#textbox/);
+assert.match(content, /VIDEO_MADE_FOR_KIDS_NOT_MFK/);
+assert.match(content, /ytcp-button#next-button/);
+assert.match(content, /name="SCHEDULE"/);
+assert.match(content, /ytcp-button#done-button/);
+assert.match(bg, /uploadComplete&&s\.doneReady/);
+assert.match(html, /Exact channel: 3S Verse/);
+console.log("YouTube routing contracts passed.");

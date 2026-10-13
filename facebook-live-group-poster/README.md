@@ -2,6 +2,8 @@
 
 Separate Chrome extension for posting one Facebook Live link, text and hashtags to a saved selection of groups joined by the signed-in Facebook account.
 
+Version 1.1.0 uses the Facebook icon and enables trusted text input while the Facebook tab is unfocused.
+
 ## Workflow
 
 1. Load this folder as an unpacked Chrome extension.

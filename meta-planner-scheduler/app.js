@@ -1,8 +1,11 @@
 const $ = selector => document.querySelector(selector);
 const PLANNER_URL = "https://business.facebook.com/latest/content_calendar?business_id=4880742675547794&asset_id=1376773818846890";
 let queue = [];
+let displayQueue = [];
 let stopped = false;
 const sourceForFile = new WeakMap();
+const PROGRESS_KEY = "metaScheduleProgressV1";
+let progress = {};
 
 const WINDOWS_SEPARATOR = "\\";
 
@@ -47,6 +50,22 @@ function setStatus(message, error = false) {
   $("#status").style.color = error ? "#ff9a9a" : "#aab3d4";
 }
 
+function itemKey(item) {
+  return `${item.day}:${item.type}:${item.date}:${item.time}:${item.file?.name || ""}`;
+}
+
+function itemStatus(item) {
+  if (progress[itemKey(item)]?.status === "completed") return "completed";
+  if (item.skipped) return "skipped";
+  return progress[itemKey(item)]?.status || "pending";
+}
+
+async function setItemStatus(item, status, detail = "") {
+  progress[itemKey(item)] = { status, detail, updatedAt: new Date().toISOString() };
+  await chrome.storage.local.set({ [PROGRESS_KEY]: progress });
+  renderQueue();
+}
+
 async function rebuildQueue() {
   try {
     const files = selectedFiles();
@@ -62,23 +81,30 @@ async function rebuildQueue() {
     const firstDayTime = $("#customFirstDay").checked ? $("#firstDayTime").value : "";
     const startDay = Math.max(1, Number($("#startDay").value) || 1);
     queue = MetaSchedulerLib.buildQueue(captions, media, images, $("#startDate").value, $("#time").value, settings(), firstDayTime, startDay);
+    const campaignStartDate = MetaSchedulerLib.addDays($("#startDate").value, 1 - startDay);
+    const previous = MetaSchedulerLib.buildQueue(captions, media, images, campaignStartDate, $("#time").value, settings(), firstDayTime, 1)
+      .filter(item => item.day < startDay)
+      .map(item => ({ ...item, skipped: true }));
+    displayQueue = [...previous, ...queue];
     renderQueue();
     setStatus(`Matched ${captions.length} captions, ${media.length} videos and ${images.length} images. Queue: ${queue.length}.`);
   } catch (error) {
     queue = [];
+    displayQueue = [];
     renderQueue();
     setStatus(error.message, true);
   }
 }
 
 function renderQueue() {
-  $("#queueCount").textContent = `${queue.length} items`;
-  $("#queue").innerHTML = queue.length ? queue.map(item => `
+  $("#queueCount").textContent = `${displayQueue.length} items · ${queue.length} scheduled from selected day`;
+  $("#queue").innerHTML = displayQueue.length ? displayQueue.map(item => `
     <div class="queueItem">
       <span>Day ${item.day}</span>
       <span>${item.heading}</span>
       <span>${item.type.toUpperCase()}</span>
       <span>${item.date} ${item.time}</span>
+      <span class="queueStatus" data-status="${itemStatus(item)}">${itemStatus(item).toUpperCase()}</span>
     </div>`).join("") : '<p class="hint">Select one or two folders to build the queue.</p>';
 }
 
@@ -113,13 +139,20 @@ async function start() {
   for (let index = 0; index < queue.length; index += 1) {
     if (stopped) break;
     const item = queue[index];
+    await setItemStatus(item, "running");
     setStatus(`Scheduling ${index + 1} of ${queue.length}: Day ${item.day} ${item.type}…`);
-    const response = await chrome.runtime.sendMessage({
-      type: "SCHEDULE_META_ITEM",
-      plannerUrl: PLANNER_URL,
-      item: { ...item, file: await filePayload(item.file) }
-    });
-    if (!response?.ok) throw new Error(`Day ${item.day} ${item.type}: ${response?.error || "Meta scheduling failed."}`);
+    try {
+      const response = await chrome.runtime.sendMessage({
+        type: "SCHEDULE_META_ITEM",
+        plannerUrl: PLANNER_URL,
+        item: { ...item, file: await filePayload(item.file) }
+      });
+      if (!response?.ok) throw new Error(response?.error || "Meta scheduling failed.");
+    } catch (error) {
+      await setItemStatus(item, "failed", error.message);
+      throw new Error(`Day ${item.day} ${item.type}: ${error.message}`);
+    }
+    await setItemStatus(item, "completed");
     setStatus(`Scheduled ${index + 1} of ${queue.length}.`);
     await new Promise(resolve => setTimeout(resolve, 3500));
   }
@@ -151,8 +184,10 @@ $("#start").addEventListener("click", () => start().catch(error => {
 }));
 $("#stop").addEventListener("click", () => { stopped = true; $("#stop").disabled = true; });
 $("#startDate").value = tomorrow();
-chrome.storage.local.get(["metaCaptionPath", "metaReelPath"]).then(result => {
+chrome.storage.local.get(["metaCaptionPath", "metaReelPath", PROGRESS_KEY]).then(result => {
+  progress = result[PROGRESS_KEY] || {};
   if (result.metaCaptionPath) $("#captionPath").value = result.metaCaptionPath;
   if (result.metaReelPath) $("#reelPath").value = result.metaReelPath;
+  renderQueue();
 });
 renderQueue();

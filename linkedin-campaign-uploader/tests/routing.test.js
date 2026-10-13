@@ -6,7 +6,11 @@ const background = fs.readFileSync(path.join(root, "background.js"), "utf8");
 const content = fs.readFileSync(path.join(root, "content.js"), "utf8");
 const appHtml = fs.readFileSync(path.join(root, "app.html"), "utf8");
 const appJs = fs.readFileSync(path.join(root, "app.js"), "utf8");
+const manifest = JSON.parse(fs.readFileSync(path.join(root, "manifest.json"), "utf8"));
 
+assert.equal(manifest.version, "1.2.0");
+assert.match(background, /Emulation\.setFocusEmulationEnabled/);
+assert.match(appJs, /linkedinScheduleProgressV1/);
 assert.match(background, /company\/144975022\/admin\/dashboard/);
 assert.match(background, /Page\.setInterceptFileChooserDialog/);
 assert.match(background, /DOM\.setFileInputFiles/);
