@@ -74,6 +74,28 @@ async function trustedText(tabId, text) {
 
 async function save(state) { await chrome.storage.local.set({ livePosterCampaign: state }); return state; }
 
+function groupId(url) {
+  try { return new URL(url).pathname.match(/^\/groups\/([^/]+)/i)?.[1]?.toLowerCase() || null; }
+  catch (_) { return null; }
+}
+
+// Persist the checklist HERE in the background: the popup closes the moment
+// focus leaves it, so a scan that succeeded used to lose every group before
+// the popup could save it. The merge keeps the owner's checked/unchecked
+// selection and pre-selects newly found groups.
+async function persistImportedGroups(groups) {
+  const stored = await chrome.storage.local.get(["livePosterGroups", "livePosterSelectedIds"]);
+  const merged = new Map((stored.livePosterGroups || []).map(group => [groupId(group.url), group]));
+  const selected = new Set(stored.livePosterSelectedIds || []);
+  for (const group of groups) {
+    const id = groupId(group.url);
+    if (!id) continue;
+    if (!merged.has(id)) { merged.set(id, group); selected.add(id); }
+  }
+  await chrome.storage.local.set({ livePosterGroups: [...merged.values()], livePosterSelectedIds: [...selected].filter(id => merged.has(id)) });
+  return [...merged.values()];
+}
+
 async function resume() {
   if (busy) return; busy = true;
   try {
@@ -104,7 +126,7 @@ chrome.alarms.onAlarm.addListener(alarm => { if (alarm.name === ALARM) resume();
 chrome.runtime.onStartup.addListener(resume);
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === "IMPORT_JOINED_GROUPS") {
-    (async () => { const tab = await facebookTab(); const joined = await importGroups(tab); sendResponse({ ok:true, groups:joined.groups, expected:joined.expected, partial:joined.partial, tabId:tab.id }); })().catch(error => sendResponse({ ok:false,error:error.message }));
+    (async () => { const tab = await facebookTab(); const joined = await importGroups(tab); const groups = await persistImportedGroups(joined.groups); sendResponse({ ok:true, groups, expected:joined.expected, partial:joined.partial, tabId:tab.id }); })().catch(error => sendResponse({ ok:false,error:error.message }));
     return true;
   }
   if (message.type === "START_LIVE_CAMPAIGN") {

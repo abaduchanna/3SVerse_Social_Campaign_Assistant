@@ -5,6 +5,8 @@ let storedMedia = null;
 let groups = [];
 let selectedIds = new Set();
 
+$("#extVersion").textContent = `v${chrome.runtime.getManifest().version}`;
+
 function identity(url) {
   try {
     return new URL(url).pathname.match(/^\/groups\/([^/]+)/i)?.[1]?.toLowerCase() || "";
@@ -24,7 +26,13 @@ function selectedCount() {
 }
 
 function renderGroups() {
-  if (!groups.length) return;
+  if (!groups.length) {
+    $("#groupList").innerHTML = "";
+    selectedCount();
+    return;
+  }
+  $("#groupSearch").hidden = false;
+  $("#selectAllRow").hidden = false;
   const filter = $("#groupSearch").value.trim().toLowerCase();
   const visible = groups.filter(group => !filter || group.name.toLowerCase().includes(filter));
   $("#groupList").innerHTML = visible.length ? visible.map(group => {
@@ -60,13 +68,13 @@ function setStatus(message, error = false) {
   $("#status").style.color = error ? "#ff9a9a" : "#aab3d4";
 }
 
-function paintStoredMedia() {
+async function paintStoredMedia() {
   const hasStoredMedia = Boolean(storedMedia?.bytes?.length);
   $("#media").hidden = hasStoredMedia;
   $("#storedMediaCard").hidden = !hasStoredMedia;
   $("#storedMediaName").textContent = hasStoredMedia ? `Stored reel/image: ${storedMedia.name}` : "";
   $("#mediaHint").textContent = hasStoredMedia
-    ? "This stored file will be uploaded to every group in the campaign."
+    ? "Saved inside the extension — this copy is uploaded to every group even after you delete the original from Downloads."
     : "Optional. Without a file, every group receives a text-only post.";
 }
 
@@ -120,36 +128,15 @@ $("#importGroups").addEventListener("click", async () => {
   const button = $("#importGroups");
   try {
     button.disabled = true;
-    setStatus("Opening Facebook Your groups and scrolling the joined-groups list…");
+    setStatus("Opening Facebook Your groups and scrolling the joined-groups list… (you can close this popup — the list saves itself)");
     const response = await chrome.runtime.sendMessage({ type: "IMPORT_GROUPS" });
     if (!response?.ok) throw new Error(response?.error || "Joined groups could not be imported.");
-    // MERGE, never replace: a partial import (Facebook lazy-loads the long
-    // list in batches) is followed by more imports; earlier groups and the
-    // owner's checked/unchecked selection must survive each round.
-    const previous = new Map(groups.map(group => [identity(group.url), group]));
-    for (const group of response.groups || []) {
-      const id = identity(group.url);
-      if (id && !previous.has(id)) previous.set(id, group);
-    }
-    const fresh = !groups.length;
-    groups = [...previous.values()];
-    if (fresh) {
-      selectedIds = new Set(groups.map(group => identity(group.url)).filter(Boolean));
-    } else {
-      for (const id of previous.keys()) {
-        if (!selectedIds.has(id)) selectedIds.add(id); // newly found stores pre-selected
-      }
-    }
-    await persistGroupPick();
-    $("#groupSearch").hidden = false;
-    $("#selectAllRow").hidden = false;
-    $("#selectAll").checked = selectedIds.size === groups.length;
-    renderGroups();
+    await applyImportedGroups();
     const expected = response.expected || 0;
     if (response.partial && expected) {
       setStatus(`Loaded ${groups.length} of ${expected} joined groups — Facebook lazy-loads the rest in batches. Tap Import joined groups again to load more (your selection is kept).`);
     } else {
-      setStatus(`Imported ${groups.length} joined groups. Uncheck any store you want to skip, then start.`);
+      setStatus(`Imported ${groups.length} joined groups. The checklist and your ticks are saved — close and reopen this popup any time.`);
     }
   } catch (error) {
     setStatus(error.message, true);
@@ -157,6 +144,18 @@ $("#importGroups").addEventListener("click", async () => {
     button.disabled = false;
   }
 });
+
+// The background persists the merged checklist (importedGroupsStore); the
+// popup only MIRRORS it. This keeps the visible list identical to what is
+// saved, no matter when the popup opens or closes.
+async function applyImportedGroups() {
+  const saved = (await chrome.storage.local.get("importedGroupsStore")).importedGroupsStore;
+  if (!Array.isArray(saved?.groups)) return;
+  groups = saved.groups;
+  selectedIds = new Set(saved.selectedIds || []);
+  $("#selectAll").checked = groups.length > 0 && selectedIds.size === groups.length;
+  renderGroups();
+}
 
 $("#groupSearch").addEventListener("input", renderGroups);
 
@@ -217,11 +216,17 @@ $("#clearMedia").addEventListener("click", async () => {
 });
 
 chrome.storage.onChanged.addListener(changes => {
-  if (!changes.autoCampaign?.newValue) return;
-  runState = changes.autoCampaign.newValue;
-  campaign.facebookTabId = runState.tabId || campaign.facebookTabId;
-  paint();
-  setStatus(runState.status || "Campaign updated.", Boolean(runState.error));
+  if (changes.autoCampaign?.newValue) {
+    runState = changes.autoCampaign.newValue;
+    campaign.facebookTabId = runState.tabId || campaign.facebookTabId;
+    paint();
+    setStatus(runState.status || "Campaign updated.", Boolean(runState.error));
+  }
+  // Live-render the checklist if the background saves an import while this
+  // popup is open (covers reopening the popup while an import finishes).
+  if (changes.importedGroupsStore?.newValue) {
+    applyImportedGroups().catch(() => {});
+  }
 });
 
 chrome.storage.local.get(["campaign", "autoCampaign", "autoCampaignMedia", "importedGroupsStore"]).then(result => {
@@ -233,12 +238,9 @@ chrome.storage.local.get(["campaign", "autoCampaign", "autoCampaignMedia", "impo
   if (Array.isArray(result.importedGroupsStore?.groups) && result.importedGroupsStore.groups.length) {
     groups = result.importedGroupsStore.groups;
     selectedIds = new Set(result.importedGroupsStore.selectedIds || []);
-    $("#groupSearch").hidden = false;
-    $("#selectAllRow").hidden = false;
-    $("#selectAll").checked = selectedIds.size === groups.length;
-    renderGroups();
   }
   $("#caption").value = campaign.caption;
+  renderGroups();
   paintStoredMedia();
   paint();
   setStatus(runState.status || "Ready.", Boolean(runState.error));

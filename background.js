@@ -114,6 +114,33 @@ async function saveState(state) {
   return state;
 }
 
+// The joined-groups checklist is persisted HERE in the background, never
+// only through the popup: the popup dies the moment focus leaves it (the
+// import itself opens/scrolls Facebook), so a scan that returned 622 groups
+// used to be lost before the checklist could render. The background merge
+// keeps the owner's checked/unchecked stores and pre-selects newly found
+// ones, so the list and its selection survive any popup close/reopen.
+async function persistImportedGroups(groups) {
+  const stored = await chrome.storage.local.get("importedGroupsStore");
+  const existing = stored.importedGroupsStore || { groups: [], selectedIds: [] };
+  const merged = new Map((existing.groups || []).map(group => [groupIdentity(group.url), group]));
+  const selected = new Set(existing.selectedIds || []);
+  for (const group of groups) {
+    const id = groupIdentity(group.url);
+    if (!id) continue;
+    if (!merged.has(id)) {
+      merged.set(id, group);
+      selected.add(id); // newly found stores pre-selected
+    }
+  }
+  const persisted = {
+    groups: [...merged.values()],
+    selectedIds: [...selected].filter(id => merged.has(id))
+  };
+  await chrome.storage.local.set({ importedGroupsStore: persisted });
+  return persisted;
+}
+
 async function insertCaptionWithDebugger(tabId, caption) {
   const target = { tabId };
   let attached = false;
@@ -240,14 +267,17 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       if (!groups.length) {
         throw new Error("No joined Facebook groups were found. Open Facebook, confirm you are signed in, and retry.");
       }
+      // Persist BEFORE reporting: even if the popup closed mid-import, the
+      // checklist is already saved and will render on the next open.
+      const persisted = await persistImportedGroups(groups);
       await saveState({
         active: false, tabId: tab.id, index: 0, posted: 0, total: 0,
         status: joined.partial
-          ? `Loaded ${groups.length} of ${joined.expected || "?"} joined groups (partial). Import again to load more; the selection list is ready.`
-          : `Imported ${groups.length} joined groups. Choose which stores to post to, then start.`,
+          ? `Loaded ${persisted.groups.length} of ${joined.expected || "?"} joined groups (partial). Import again to load more; the selection list is ready.`
+          : `Imported ${persisted.groups.length} joined groups. The checklist is saved — reopen this popup any time.`,
         error: null
       });
-      sendResponse({ ok: true, groups, count: groups.length, expected: joined.expected || 0, partial: Boolean(joined.partial) });
+      sendResponse({ ok: true, groups: persisted.groups, count: persisted.groups.length, expected: joined.expected || 0, partial: Boolean(joined.partial) });
     })().catch(error => sendResponse({ ok: false, error: error.message }));
     return true;
   }
@@ -262,10 +292,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       };
       await saveState(resolvingState);
       const joined = await loadJoinedGroups(tab.id);
+      const scanned = allJoinedGroups(joined.groups || []);
+      if (scanned.length) await persistImportedGroups(scanned); // keep the checklist current
       const wanted = Array.isArray(message.selected)
         ? new Set(message.selected.map(value => String(value).toLowerCase()))
         : null;
-      const targets = allJoinedGroups(joined.groups || []).filter(group =>
+      const targets = scanned.filter(group =>
         !wanted || wanted.has(groupIdentity(group.url)));
       if (!targets.length) {
         throw new Error(wanted

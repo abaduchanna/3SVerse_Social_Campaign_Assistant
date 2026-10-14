@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "3SVerse Facebook Group Posting",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "Post text, images, and videos to the joined Facebook groups you select, from your existing Chrome session.",
   "permissions": ["storage", "tabs", "scripting", "alarms", "unlimitedStorage", "debugger"],
   "host_permissions": ["https://www.facebook.com/*", "https://m.facebook.com/*"],

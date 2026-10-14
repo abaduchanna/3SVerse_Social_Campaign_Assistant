@@ -9,13 +9,17 @@ const html = fs.readFileSync(path.join(root, "app.html"), "utf8");
 const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
 const manifest = JSON.parse(fs.readFileSync(path.join(root, "manifest.json"), "utf8"));
 
-assert.equal(manifest.version, "1.1.0");
+assert.equal(manifest.version, "1.2.0");
 assert.match(bg, /Emulation\.setFocusEmulationEnabled/);
 assert.match(app, /youtubeScheduleProgressV1/);
 assert.match(app, /skipped: true/);
 assert.match(app, /setItemStatus\(item, "running"/);
 assert.match(app, /setItemStatus\(item, "completed"/);
 assert.match(app, /setItemStatus\(item, "failed"/);
+assert.match(app, /AssetVault\.all\(\)/);
+assert.match(app, /vaultRestoreIfEmpty/);
+assert.match(html, /assets\.js/);
+assert.match(html, /clearVault/);
 assert.match(content, /button#avatar-btn/);
 assert.match(content, /switch account/);
 assert.match(bg, /norm\(s\.currentChannel\)===norm\(wanted\)/);

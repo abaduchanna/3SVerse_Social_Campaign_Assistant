@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "3SVerse Facebook Live Group Poster",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Post a Facebook Live link with saved text and hashtags to selected joined groups.",
   "permissions": ["storage", "tabs", "scripting", "alarms", "debugger"],
   "host_permissions": ["https://www.facebook.com/*", "https://m.facebook.com/*"],

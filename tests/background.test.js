@@ -145,10 +145,18 @@ function send(message) {
   ];
   const imported = await send({ type: "IMPORT_GROUPS" });
   assert.equal(imported.ok, true);
-  assert.equal(imported.groups.length, 2);
+  // v1.5.0: the response mirrors the PERSISTED merged checklist — every store
+  // scanned in this test file so far is still in the list, not just this round.
+  assert.equal(imported.groups.length, 6);
   assert.equal(data.autoCampaign.active, false);
   assert.equal(data.autoCampaign.total, 0);
-  assert.match(data.autoCampaign.status, /Imported 2 joined groups/);
+  assert.match(data.autoCampaign.status, /Imported 6 joined groups/);
+
+  // v1.5.0: the background itself saved the checklist + selection, so a popup
+  // that closed mid-import can no longer lose the list.
+  assert.equal(data.importedGroupsStore.groups.length, 6);
+  assert.deepEqual([...data.importedGroupsStore.selectedIds].sort(),
+    ["111", "222", "333", "444", "888", "999"]);
 
   // v1.3.0: START_CAMPAIGN posts only to the selected group identities
   const selective = await send({ type: "START_CAMPAIGN", caption: "Sel", selected: ["999"] });
@@ -175,10 +183,12 @@ function send(message) {
   const partial = await send({ type: "IMPORT_GROUPS" });
   scanResponse = null;
   assert.equal(partial.ok, true);
-  assert.equal(partial.groups.length, 1);
+  assert.equal(partial.groups.length, 7);
   assert.equal(partial.expected, 618);
   assert.equal(partial.partial, true);
   assert.match(data.autoCampaign.status, /partial/);
+  assert.equal(data.importedGroupsStore.groups.length, 7);
+  assert.ok(data.importedGroupsStore.selectedIds.includes("771"));
 
   // v1.4.0: Start still works off the partial list — selected loaded groups post fine
   const partialStart = await send({ type: "START_CAMPAIGN", caption: "P", selected: ["771"] });
@@ -189,6 +199,18 @@ function send(message) {
   assert.equal(data.autoCampaign.posted, 1);
   assert.equal(data.autoCampaign.active, false);
   assert.equal(preparedGroups.at(-1), "https://www.facebook.com/groups/771/");
+
+  // v1.5.0: a re-import never wipes the saved list and never resurrects a
+  // store the owner unchecked — the ticks survive every round.
+  joinedGroups = [
+    { name: "Store A", url: "https://www.facebook.com/groups/888/" },
+    { name: "Store B", url: "https://www.facebook.com/groups/999/" }
+  ];
+  data.importedGroupsStore.selectedIds = ["888"]; // owner unchecked the rest
+  const reimported = await send({ type: "IMPORT_GROUPS" });
+  assert.equal(reimported.ok, true);
+  assert.equal(data.importedGroupsStore.groups.length, 7);
+  assert.deepEqual([...data.importedGroupsStore.selectedIds], ["888"]);
 
   process.stdout.write("background campaign test passed\n");
 })().catch(error => {

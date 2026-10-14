@@ -2,10 +2,41 @@ const $ = selector => document.querySelector(selector);
 const STUDIO_URL = "https://studio.youtube.com/";
 const sourceForFile = new WeakMap();
 const PROGRESS_KEY = "youtubeScheduleProgressV1";
+
+$("#extVersion").textContent = `v${chrome.runtime.getManifest().version}`;
 let queue = [];
 let displayQueue = [];
 let progress = {};
 let stopped = false;
+let vaultFiles = [];
+
+// ---- extension vault: campaign files saved INSIDE the extension ----
+async function vaultSync(files) {
+  const bySlot = new Map();
+  for (const file of files) {
+    const slot = sourceForFile.get(file) || file.__vaultSlot || "";
+    if (!slot) continue;
+    if (!bySlot.has(slot)) bySlot.set(slot, []);
+    bySlot.get(slot).push(file);
+  }
+  let saved = 0;
+  for (const [slot, slotFiles] of bySlot) saved += await vaultSaveFiles(slot, slotFiles);
+  return saved;
+}
+
+async function vaultTotal() {
+  return (await AssetVault.all()).length;
+}
+
+async function vaultRestoreIfEmpty(rebuild) {
+  vaultFiles = [];
+  const records = await AssetVault.all();
+  if (!records.length) return false;
+  if (($("#folder1")?.files?.length || 0) + ($("#folder2")?.files?.length || 0)) return false; // live folder still linked
+  for (const record of records) vaultFiles.push(vaultFile(record));
+  if (rebuild) await rebuildQueue();
+  return true;
+}
 
 function tomorrow() {
   const date = new Date();
@@ -16,6 +47,10 @@ function tomorrow() {
 
 function selectedFiles() {
   const seen = new Map();
+  for (const file of vaultFiles) {
+    sourceForFile.set(file, file.__vaultSlot || "folder1");
+    seen.set(`${file.webkitRelativePath || file.name}:${file.size}:${file.lastModified}`, file);
+  }
   for (const input of [$("#folder1"), $("#folder2")]) {
     for (const file of input.files) {
       sourceForFile.set(file, input.id);
@@ -73,7 +108,13 @@ async function rebuildQueue() {
       .map(item => ({ ...item, skipped: true }));
     displayQueue = [...previous, ...queue];
     renderQueue();
-    setStatus(`Matched ${entries.length} captions and ${videos.length} videos. ${queue.length} daily uploads ready.`);
+    let vaultNote = "";
+    try {
+      const savedNow = await vaultSync(files);
+      const total = await vaultTotal();
+      if (total) vaultNote = ` ${total} file copies saved inside the extension — deleting the folder from Downloads is safe.`;
+    } catch (_) {}
+    setStatus(`Matched ${entries.length} captions and ${videos.length} videos. ${queue.length} daily uploads ready.${vaultNote}`);
   } catch (error) {
     queue = [];
     displayQueue = [];
@@ -120,17 +161,38 @@ async function start() {
 
 for (const selector of ["#folder1", "#folder2", "#startDay", "#startDate", "#time"]) $(selector).addEventListener("change", rebuildQueue);
 for (const number of [1, 2]) {
-  $("#folder" + number).addEventListener("change", () => { $("#folder" + number + "Summary").textContent = $("#folder" + number).files.length ? `Folder ${number} linked: ${$("#folder" + number).files.length} files` : `Folder ${number} not selected`; });
+  $("#folder" + number).addEventListener("change", async () => {
+    const input = $("#folder" + number);
+    $("#folder" + number + "Summary").textContent = input.files.length ? `Folder ${number} linked: ${input.files.length} files` : `Folder ${number} not selected`;
+    if (input.files.length) {
+      // A freshly linked folder replaces its saved copies in the vault.
+      try { await AssetVault.clearSlot("folder" + number); } catch (_) {}
+      vaultFiles = vaultFiles.filter(file => file.__vaultSlot !== "folder" + number);
+    }
+  });
   $("#path" + number).addEventListener("change", () => chrome.storage.local.set({ ["youtubePath" + number]: $("#path" + number).value.trim() }));
 }
 $("#openYouTube").addEventListener("click", () => chrome.tabs.create({ url: STUDIO_URL }));
 $("#start").addEventListener("click", () => start().catch(error => { $("#start").disabled = false; $("#stop").disabled = true; setStatus(error.message, true); }));
 $("#stop").addEventListener("click", () => { stopped = true; $("#stop").disabled = true; });
+$("#clearVault").addEventListener("click", async () => {
+  try {
+    await AssetVault.clearAll();
+    vaultFiles = [];
+    setStatus("Saved file copies cleared inside the extension. Link the campaign folder again to save fresh copies.");
+    if (!$("#folder1").files.length && !$("#folder2").files.length) { queue = []; displayQueue = []; renderQueue(); }
+  } catch (error) { setStatus(error.message, true); }
+});
 chrome.storage.local.get(["youtubePath1", "youtubePath2", PROGRESS_KEY]).then(result => {
   progress = result[PROGRESS_KEY] || {};
   if (result.youtubePath1) $("#path1").value = result.youtubePath1;
   if (result.youtubePath2) $("#path2").value = result.youtubePath2;
   renderQueue();
+  // No live folder linked? Rebuild the queue from the copies saved inside
+  // the extension, so a deleted Downloads folder never stops the campaign.
+  vaultRestoreIfEmpty(true).then(restored => {
+    if (restored) setStatus(`Restored ${vaultFiles.length} saved campaign files from inside the extension — the Downloads folder is no longer needed.`);
+  }).catch(error => setStatus(error.message, true));
 });
 $("#startDate").value = tomorrow();
 renderQueue();

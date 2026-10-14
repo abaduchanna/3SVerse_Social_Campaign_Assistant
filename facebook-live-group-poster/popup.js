@@ -3,6 +3,8 @@ let groups = [];
 let selectedIds = new Set();
 let state = { active: false, posted: 0, total: 0, index: 0, status: "Ready." };
 
+$("#extVersion").textContent = `v${chrome.runtime.getManifest().version}`;
+
 function identity(url) {
   try { return new URL(url).pathname.match(/^\/groups\/([^/]+)/i)?.[1]?.toLowerCase() || ""; }
   catch (_) { return ""; }
@@ -48,29 +50,25 @@ function paintState() {
 
 $("#importGroups").addEventListener("click", async () => {
   try {
-    setStatus("Opening Facebook Your groups and scrolling the joined-groups list…");
+    setStatus("Opening Facebook Your groups and scrolling the joined-groups list… (you can close this popup — the list saves itself)");
     const response = await chrome.runtime.sendMessage({ type: "IMPORT_JOINED_GROUPS" });
     if (!response?.ok) throw new Error(response?.error || "Joined groups could not be imported.");
-    // MERGE, never replace: partial imports (Facebook lazy-loads long lists
-    // in batches) are completed by repeat imports; earlier groups and the
-    // owner's selection must survive each round.
-    const previous = new Map(groups.map(group => [identity(group.url), group]));
-    for (const group of response.groups || []) {
-      const id = identity(group.url);
-      if (id && !previous.has(id)) previous.set(id, group);
-    }
-    const fresh = !groups.length;
-    groups = [...previous.values()];
-    if (fresh) selectedIds = new Set(groups.map(group => identity(group.url)).filter(Boolean));
-    else for (const id of previous.keys()) { if (!selectedIds.has(id)) selectedIds.add(id); }
-    await chrome.storage.local.set({ livePosterGroups: groups, livePosterSelectedIds: [...selectedIds] });
-    renderGroups();
+    await mirrorStore();
     const expected = response.expected || 0;
     setStatus(response.partial && expected
       ? `Loaded ${groups.length} of ${expected} joined groups — Facebook lazy-loads the rest in batches. Tap Import joined groups again to load more (your selection is kept).`
-      : `Imported ${groups.length} joined groups. Choose destinations and save the selection.`);
+      : `Imported ${groups.length} joined groups. The checklist and your ticks are saved — tap Save selection any time to be safe.`);
   } catch (error) { setStatus(error.message, true); }
 });
+
+// The background persists the merged checklist; the popup MIRRORS it, so the
+// visible list is always exactly what is saved.
+async function mirrorStore() {
+  const saved = await chrome.storage.local.get(["livePosterGroups", "livePosterSelectedIds"]);
+  groups = saved.livePosterGroups || [];
+  selectedIds = new Set(saved.livePosterSelectedIds || []);
+  renderGroups();
+}
 
 $("#groupSearch").addEventListener("input", renderGroups);
 $("#selectAll").addEventListener("change", () => {
@@ -113,10 +111,14 @@ $("#openTab").addEventListener("click", async () => {
 });
 
 chrome.storage.onChanged.addListener(changes => {
-  if (!changes.livePosterCampaign?.newValue) return;
-  state = changes.livePosterCampaign.newValue;
-  paintState();
-  setStatus(state.status || "Updated.", Boolean(state.error));
+  if (changes.livePosterCampaign?.newValue) {
+    state = changes.livePosterCampaign.newValue;
+    paintState();
+    setStatus(state.status || "Updated.", Boolean(state.error));
+  }
+  // Live-render the checklist when the background saves an import while the
+  // popup is open.
+  if (changes.livePosterGroups?.newValue) mirrorStore().catch(() => {});
 });
 
 chrome.storage.local.get(["livePosterForm", "livePosterGroups", "livePosterSelectedIds", "livePosterCampaign"]).then(saved => {
