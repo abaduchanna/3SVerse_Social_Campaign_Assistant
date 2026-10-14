@@ -36,16 +36,16 @@ async function ensureContent(tabId) {
 }
 
 async function importGroups(tab) {
-  if (!tab.url?.startsWith("https://www.facebook.com/groups/joins/")) {
-    const previous = tab.url;
-    await chrome.tabs.update(tab.id, { url: JOINED_GROUPS_URL, active: false });
-    await waitNavigation(tab.id, previous);
-  }
+  // ALWAYS (re)load Your groups so every import starts from a fresh,
+  // unscrolled virtual list (repeat import after a partial scan must not
+  // continue on an exhausted list).
+  await chrome.tabs.update(tab.id, { url: JOINED_GROUPS_URL, active: false });
+  await new Promise(r=>setTimeout(r,800));
   await waitReady(tab.id); await ensureContent(tab.id);
   const response = await chrome.tabs.sendMessage(tab.id, { type: "SCAN_GROUPS" });
   if (!response?.ok) throw new Error(response?.error || "Your groups could not be read.");
-  const unique = new Map(response.groups.map(group => [new URL(group.url).pathname, group]));
-  return [...unique.values()];
+  const unique = new Map((response.groups||[]).map(group => [new URL(group.url).pathname, group]));
+  return { groups: [...unique.values()], expected: response.expected || 0, partial: Boolean(response.partial) };
 }
 
 async function prepare(tabId, target) {
@@ -104,7 +104,7 @@ chrome.alarms.onAlarm.addListener(alarm => { if (alarm.name === ALARM) resume();
 chrome.runtime.onStartup.addListener(resume);
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === "IMPORT_JOINED_GROUPS") {
-    (async () => { const tab = await facebookTab(); const groups = await importGroups(tab); sendResponse({ ok:true, groups, tabId:tab.id }); })().catch(error => sendResponse({ ok:false,error:error.message }));
+    (async () => { const tab = await facebookTab(); const joined = await importGroups(tab); sendResponse({ ok:true, groups:joined.groups, expected:joined.expected, partial:joined.partial, tabId:tab.id }); })().catch(error => sendResponse({ ok:false,error:error.message }));
     return true;
   }
   if (message.type === "START_LIVE_CAMPAIGN") {

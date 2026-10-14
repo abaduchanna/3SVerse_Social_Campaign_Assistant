@@ -37,22 +37,44 @@
     return [...map.values()].filter(g => g.name);
   }
 
+  function scrollCands(){
+    const list=[{el:document.scrollingElement,win:true}];
+    for(const el of document.querySelectorAll("div")) if(el.clientHeight>200&&el.scrollHeight>el.clientHeight+100&&visible(el)) list.push({el,win:false});
+    return list;
+  }
+  function stepScroll(item){
+    const before=item.win?window.scrollY:item.el.scrollTop;
+    if(item.win) window.scrollBy(0,Math.max(window.innerHeight*0.75,400));
+    else { item.el.scrollTop=before+Math.max(item.el.clientHeight*0.75,400); item.el.dispatchEvent(new Event("scroll",{bubbles:true})); }
+    const after=item.win?window.scrollY:item.el.scrollTop;
+    return after>before+2;
+  }
+
   async function scanGroups() {
     if (!location.pathname.startsWith("/groups/joins")) throw new Error("Facebook Your groups page is not open.");
     const countText = [...document.querySelectorAll("h1,h2,h3,[role=heading]")].map(e=>e.innerText||"").find(text=>/(all\s+)?groups\s+you.?ve\s+joined\s*\(\d+\)/i.test(text));
     const expected = Number(countText?.match(/\((\d+)\)/)?.[1] || 0);
     const all = new Map();
     const collect = () => groupsVisibleNow().forEach(group => all.set(groupId(group.url), group));
-    collect(); let stable = 0;
-    for (let pass=0; pass<140 && (!expected || all.size<expected) && stable<10; pass+=1) {
-      const before=all.size;
-      const scrollable=[...document.querySelectorAll("div")].filter(e=>visible(e)&&e.scrollHeight>e.clientHeight+100).sort((a,b)=>b.scrollHeight-a.scrollHeight)[0]||document.scrollingElement;
-      if (scrollable===document.scrollingElement) window.scrollTo(0,document.body.scrollHeight); else { scrollable.scrollTop=scrollable.scrollHeight; scrollable.dispatchEvent(new Event("scroll",{bubbles:true})); }
-      await sleep(1500); collect(); stable=all.size>before?0:stable+1;
+    collect();
+    // Facebook virtualizes this list: cards unmount as they leave the
+    // viewport, so jump-to-bottom scrolling skips whole batches (owner saw
+    // 121 of 618). Step-scroll every candidate container, accumulate each
+    // group the moment it appears, rotate when a container stops yielding.
+    // A shortfall is returned as partial, NOT thrown — the popup keeps the
+    // partial list and the owner can import again.
+    const done = new Set(); let stagnant = 0;
+    for (let pass=0; pass<240 && (!expected || all.size<expected) && stagnant<24; pass+=1) {
+      const item = scrollCands().find(c => !done.has(c.win ? "win" : c.el));
+      if (!item) break;
+      const before = all.size; const moved = stepScroll(item);
+      await sleep(1300); collect();
+      stagnant = all.size > before ? 0 : stagnant + 1;
+      const el = item.el;
+      if (!moved || (el.scrollTop + el.clientHeight >= el.scrollHeight - 8 && stagnant >= 6)) { done.add(item.win ? "win" : item.el); stagnant = 0; }
     }
     if (!all.size) throw new Error("No joined Facebook groups were found.");
-    if (expected && all.size<expected) throw new Error(`Facebook loaded only ${all.size} of ${expected} joined groups. Retry after the page finishes loading.`);
-    return [...all.values()];
+    return { ok: true, groups: [...all.values()], expected, partial: Boolean(expected && all.size < expected) };
   }
 
   async function focusComposer() {
@@ -88,7 +110,7 @@
   chrome.runtime.onMessage.addListener((message,_sender,sendResponse)=>{
     if(message.type==="PING"){sendResponse({ok:true});return;}
     const run = promise => { promise.then(sendResponse).catch(error=>sendResponse({ok:false,error:error.message})); return true; };
-    if(message.type==="SCAN_GROUPS") return run(scanGroups().then(groups=>({ok:true,groups})));
+    if(message.type==="SCAN_GROUPS") return run(scanGroups());
     if(message.type==="PREPARE_LIVE_POST") return run(prepare(message.target));
     if(message.type==="VERIFY_LIVE_POST") return run(verify(message.caption));
     if(message.type==="PUBLISH_LIVE_POST") return run(publish());

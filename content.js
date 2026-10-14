@@ -102,6 +102,27 @@
     return [...groups.values()].filter(group => group.name);
   }
 
+  function scrollCandidates() {
+    const list = [{ el: document.scrollingElement, windowMode: true }];
+    for (const el of document.querySelectorAll("div")) {
+      if (el.clientHeight > 200 && el.scrollHeight > el.clientHeight + 100 && visible(el)) {
+        list.push({ el, windowMode: false });
+      }
+    }
+    return list;
+  }
+
+  function advance(item) {
+    const before = item.windowMode ? window.scrollY : item.el.scrollTop;
+    if (item.windowMode) window.scrollBy(0, Math.max(window.innerHeight * 0.75, 400));
+    else {
+      item.el.scrollTop = before + Math.max(item.el.clientHeight * 0.75, 400);
+      item.el.dispatchEvent(new Event("scroll", { bubbles: true }));
+    }
+    const after = item.windowMode ? window.scrollY : item.el.scrollTop;
+    return after > before + 2;
+  }
+
   async function scanJoinedGroups() {
     if (!location.pathname.startsWith("/groups/joins")) {
       throw new Error("Facebook Your groups page is not open.");
@@ -115,29 +136,33 @@
       for (const group of joinedGroupsOnPage()) collected.set(groupIdentity(group.url), group);
     };
     collectVisible();
-    let stable = 0;
-    for (let pass = 0; pass < 120 && (!expected || collected.size < expected) && stable < 8; pass += 1) {
+    // Facebook virtualizes this list: cards unmount as they leave the
+    // viewport, so jumping straight to the bottom skips whole batches
+    // (owner got 121 of 618). Scroll every candidate container in
+    // viewport-sized STEPS, accumulate each group the moment it appears,
+    // and rotate to the next container when one stops yielding. A shortfall
+    // is NOT an error: return the partial list so the popup can render it
+    // and offer Import again (selection is kept across imports).
+    const exhausted = new Set();
+    let stagnant = 0;
+    for (let pass = 0; pass < 240 && (!expected || collected.size < expected) && stagnant < 24; pass += 1) {
+      const item = scrollCandidates().find(c => !exhausted.has(c.windowMode ? "window" : c.el));
+      if (!item) break;
       const before = collected.size;
-      const scrollables = [...document.querySelectorAll("div")].filter(element =>
-        element.scrollHeight > element.clientHeight + 100 && visible(element)
-      );
-      const target = scrollables.sort((a, b) => b.scrollHeight - a.scrollHeight)[0]
-        || document.scrollingElement;
-      if (target === document.scrollingElement) window.scrollTo(0, document.body.scrollHeight);
-      else {
-        target.scrollTop = target.scrollHeight;
-        target.dispatchEvent(new Event("scroll", { bubbles: true }));
-      }
-      await sleep(1500);
+      const moved = advance(item);
+      await sleep(1300);
       collectVisible();
-      stable = collected.size > before ? 0 : stable + 1;
+      stagnant = collected.size > before ? 0 : stagnant + 1;
+      const el = item.el;
+      const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 8;
+      if (!moved || (atBottom && stagnant >= 6)) {
+        exhausted.add(item.windowMode ? "window" : item.el);
+        stagnant = 0;
+      }
     }
     const groups = [...collected.values()];
     if (!groups.length) throw new Error("No joined Facebook groups were found on Your groups.");
-    if (expected && groups.length < expected) {
-      throw new Error(`Facebook loaded only ${groups.length} of ${expected} joined groups. Check the connection and retry.`);
-    }
-    return { ok: true, groups, expected };
+    return { ok: true, groups, expected, partial: Boolean(expected && groups.length < expected) };
   }
 
   async function focusComposer() {

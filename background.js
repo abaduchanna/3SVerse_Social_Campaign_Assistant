@@ -88,17 +88,16 @@ async function prepareThroughNavigation(tab, message) {
 }
 
 async function loadJoinedGroups(tabId) {
-  let tab = await chrome.tabs.get(tabId);
-  if (!tab.url?.startsWith("https://www.facebook.com/groups/joins/")) {
-    const previousUrl = tab.url;
-    await chrome.tabs.update(tabId, { url: JOINED_GROUPS_URL, active: false });
-    await waitForNavigation(tabId, previousUrl);
-    tab = await waitForTabReady(tabId);
-  }
+  // ALWAYS (re)load Your groups: every import must start from a fresh,
+  // unscrolled virtual list. A repeat import after a partial scan would
+  // otherwise continue on an already-exhausted list and harvest nothing.
+  await chrome.tabs.update(tabId, { url: JOINED_GROUPS_URL, active: false });
+  await new Promise(resolve => setTimeout(resolve, 800)); // let the reload begin
+  await waitForTabReady(tabId);
   await ensureContentScript(tabId);
   const response = await chrome.tabs.sendMessage(tabId, { type: "SCAN_JOINED_GROUPS" });
   if (!response?.ok) throw new Error(response?.error || "Facebook Your groups could not be read.");
-  return response.groups || [];
+  return response;
 }
 
 function allJoinedGroups(joined) {
@@ -237,16 +236,18 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         total: 0, status: "Reading and scrolling the complete Facebook Your groups list…", error: null
       });
       const joined = await loadJoinedGroups(tab.id);
-      const groups = allJoinedGroups(joined);
+      const groups = allJoinedGroups(joined.groups || []);
       if (!groups.length) {
         throw new Error("No joined Facebook groups were found. Open Facebook, confirm you are signed in, and retry.");
       }
       await saveState({
         active: false, tabId: tab.id, index: 0, posted: 0, total: 0,
-        status: `Imported ${groups.length} joined groups. Choose which stores to post to, then start.`,
+        status: joined.partial
+          ? `Loaded ${groups.length} of ${joined.expected || "?"} joined groups (partial). Import again to load more; the selection list is ready.`
+          : `Imported ${groups.length} joined groups. Choose which stores to post to, then start.`,
         error: null
       });
-      sendResponse({ ok: true, groups, count: groups.length });
+      sendResponse({ ok: true, groups, count: groups.length, expected: joined.expected || 0, partial: Boolean(joined.partial) });
     })().catch(error => sendResponse({ ok: false, error: error.message }));
     return true;
   }
@@ -264,7 +265,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       const wanted = Array.isArray(message.selected)
         ? new Set(message.selected.map(value => String(value).toLowerCase()))
         : null;
-      const targets = allJoinedGroups(joined).filter(group =>
+      const targets = allJoinedGroups(joined.groups || []).filter(group =>
         !wanted || wanted.has(groupIdentity(group.url)));
       if (!targets.length) {
         throw new Error(wanted

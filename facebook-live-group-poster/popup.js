@@ -48,13 +48,27 @@ function paintState() {
 
 $("#importGroups").addEventListener("click", async () => {
   try {
-    setStatus("Opening Facebook Your groups and scrolling the complete joined-groups list…");
+    setStatus("Opening Facebook Your groups and scrolling the joined-groups list…");
     const response = await chrome.runtime.sendMessage({ type: "IMPORT_JOINED_GROUPS" });
     if (!response?.ok) throw new Error(response?.error || "Joined groups could not be imported.");
-    groups = response.groups;
-    await chrome.storage.local.set({ livePosterGroups: groups });
+    // MERGE, never replace: partial imports (Facebook lazy-loads long lists
+    // in batches) are completed by repeat imports; earlier groups and the
+    // owner's selection must survive each round.
+    const previous = new Map(groups.map(group => [identity(group.url), group]));
+    for (const group of response.groups || []) {
+      const id = identity(group.url);
+      if (id && !previous.has(id)) previous.set(id, group);
+    }
+    const fresh = !groups.length;
+    groups = [...previous.values()];
+    if (fresh) selectedIds = new Set(groups.map(group => identity(group.url)).filter(Boolean));
+    else for (const id of previous.keys()) { if (!selectedIds.has(id)) selectedIds.add(id); }
+    await chrome.storage.local.set({ livePosterGroups: groups, livePosterSelectedIds: [...selectedIds] });
     renderGroups();
-    setStatus(`Imported ${groups.length} joined groups. Choose destinations and save the selection.`);
+    const expected = response.expected || 0;
+    setStatus(response.partial && expected
+      ? `Loaded ${groups.length} of ${expected} joined groups — Facebook lazy-loads the rest in batches. Tap Import joined groups again to load more (your selection is kept).`
+      : `Imported ${groups.length} joined groups. Choose destinations and save the selection.`);
   } catch (error) { setStatus(error.message, true); }
 });
 

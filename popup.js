@@ -120,17 +120,37 @@ $("#importGroups").addEventListener("click", async () => {
   const button = $("#importGroups");
   try {
     button.disabled = true;
-    setStatus("Opening Facebook Your groups and scrolling the complete joined-groups list…");
+    setStatus("Opening Facebook Your groups and scrolling the joined-groups list…");
     const response = await chrome.runtime.sendMessage({ type: "IMPORT_GROUPS" });
     if (!response?.ok) throw new Error(response?.error || "Joined groups could not be imported.");
-    groups = response.groups || [];
-    selectedIds = new Set(groups.map(group => identity(group.url)).filter(Boolean));
+    // MERGE, never replace: a partial import (Facebook lazy-loads the long
+    // list in batches) is followed by more imports; earlier groups and the
+    // owner's checked/unchecked selection must survive each round.
+    const previous = new Map(groups.map(group => [identity(group.url), group]));
+    for (const group of response.groups || []) {
+      const id = identity(group.url);
+      if (id && !previous.has(id)) previous.set(id, group);
+    }
+    const fresh = !groups.length;
+    groups = [...previous.values()];
+    if (fresh) {
+      selectedIds = new Set(groups.map(group => identity(group.url)).filter(Boolean));
+    } else {
+      for (const id of previous.keys()) {
+        if (!selectedIds.has(id)) selectedIds.add(id); // newly found stores pre-selected
+      }
+    }
     await persistGroupPick();
     $("#groupSearch").hidden = false;
     $("#selectAllRow").hidden = false;
-    $("#selectAll").checked = true;
+    $("#selectAll").checked = selectedIds.size === groups.length;
     renderGroups();
-    setStatus(`Imported ${groups.length} joined groups. Uncheck any store you want to skip, then start.`);
+    const expected = response.expected || 0;
+    if (response.partial && expected) {
+      setStatus(`Loaded ${groups.length} of ${expected} joined groups — Facebook lazy-loads the rest in batches. Tap Import joined groups again to load more (your selection is kept).`);
+    } else {
+      setStatus(`Imported ${groups.length} joined groups. Uncheck any store you want to skip, then start.`);
+    }
   } catch (error) {
     setStatus(error.message, true);
   } finally {

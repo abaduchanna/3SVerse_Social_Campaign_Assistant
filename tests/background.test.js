@@ -12,6 +12,7 @@ let joinedGroups = [
 let messageListener;
 let alarmListener;
 let scheduledAlarm;
+let scanResponse = null;
 
 global.chrome = {
   tabs: {
@@ -25,10 +26,7 @@ global.chrome = {
     sendMessage: async (_tabId, message) => {
       sent.push(message.type);
       if (message.type === "PING") return { ok: true };
-      if (message.type === "SCAN_JOINED_GROUPS") return {
-        ok: true,
-        groups: joinedGroups
-      };
+      if (message.type === "SCAN_JOINED_GROUPS") return scanResponse || { ok: true, groups: joinedGroups };
       if (message.type === "PREPARE_POST") {
         preparedGroups.push(message.group);
         return { ok: true, editorReady: true };
@@ -168,6 +166,29 @@ function send(message) {
     send({ type: "START_CAMPAIGN", caption: "Sel", selected: ["404"] }),
     /None of the selected groups matched/
   );
+
+  // v1.4.0: a partial scan (Facebook lazy-load shortfall) is delivered to the
+  // popup with the partial flag instead of being thrown away
+  currentTab = { id: 7, status: "complete", url: "https://www.facebook.com/" };
+  joinedGroups = [{ name: "Store P1", url: "https://www.facebook.com/groups/771/" }];
+  scanResponse = { ok: true, groups: joinedGroups, expected: 618, partial: true };
+  const partial = await send({ type: "IMPORT_GROUPS" });
+  scanResponse = null;
+  assert.equal(partial.ok, true);
+  assert.equal(partial.groups.length, 1);
+  assert.equal(partial.expected, 618);
+  assert.equal(partial.partial, true);
+  assert.match(data.autoCampaign.status, /partial/);
+
+  // v1.4.0: Start still works off the partial list — selected loaded groups post fine
+  const partialStart = await send({ type: "START_CAMPAIGN", caption: "P", selected: ["771"] });
+  assert.equal(partialStart.state.total, 1);
+  for (let attempt = 0; attempt < 100 && data.autoCampaign?.active; attempt += 1) {
+    await new Promise(resolve => setTimeout(resolve, 5));
+  }
+  assert.equal(data.autoCampaign.posted, 1);
+  assert.equal(data.autoCampaign.active, false);
+  assert.equal(preparedGroups.at(-1), "https://www.facebook.com/groups/771/");
 
   process.stdout.write("background campaign test passed\n");
 })().catch(error => {
