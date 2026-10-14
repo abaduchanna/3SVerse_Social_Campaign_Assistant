@@ -1,78 +1,140 @@
-# 3SVerse Facebook Group Posting
+# 3SVerse Social Campaign Assistant
 
-## LinkedIn Campaign Uploader
+Five local-first Chrome extensions in one repository that publish the same campaign everywhere 3SVerse posts: Facebook groups, Facebook Live destinations, the Facebook Page + Instagram (Meta Business Suite), the LinkedIn company page, and the 3SVerse YouTube channel. Nothing leaves the machine except what Facebook, LinkedIn, Meta, and YouTube themselves publish — no 3SVerse server ever sees credentials, captions, or media.
 
-The separate `linkedin-campaign-uploader/` Chrome extension publishes day-matched image and video posts to the 3S Verse LinkedIn company page. It reads complete captions and hashtags from the campaign Markdown and uses LinkedIn's native uploader. Its LinkedIn icon keeps it visually separate from the Meta extension.
+## The five extensions at a glance
 
-Version 1.2.0 renames the root extension to **Facebook Group Posting**, uses the Facebook icon, and keeps its trusted input reliable when the Facebook tab is not focused.
+| # | Extension | Folder in this repo | What it publishes | Where it posts | Content source |
+|---|-----------|--------------------|-------------------|----------------|----------------|
+| 1 | **Facebook Group Posting** v1.5.0 | root | Caption text + hashtags + one optional image or video | Every joined Facebook group the operator ticks | Manual paste + single file picker |
+| 2 | **Facebook Live Group Poster** v1.3.0 | `facebook-live-group-poster/` | A Facebook Live link + saved message + hashtags | A saved selection of joined groups | Manual paste (no media files) |
+| 3 | **Meta Planner Scheduler** v1.6.0 | `meta-planner-scheduler/` | Day-matched Reels (videos), image posts, and Stories | Facebook Page + Instagram via Meta Business Suite Planner | Campaign folder (Markdown + media) |
+| 4 | **LinkedIn Campaign Uploader** v1.3.0 | `linkedin-campaign-uploader/` | One day-matched image **or** video post per day | 3S Verse LinkedIn company page | Campaign folder (Markdown + media) |
+| 5 | **YouTube Campaign Uploader** v1.2.0 | `youtube-campaign-uploader/` | One day-matched video or Short per day | The verified 3S Verse YouTube channel | Campaign folder (Markdown + videos) |
 
-This repository contains five local-first Chrome extensions:
+Every extension reads its version from its own `manifest.json` and shows it in the footer, so the popup always proves which build is loaded.
 
-- The root extension posts a campaign sequentially to Facebook groups joined by the signed-in account.
-- [`meta-planner-scheduler/`](meta-planner-scheduler/) imports one or two local campaign folders and schedules Facebook + Instagram Reels, image posts, and Stories through Meta Business Suite Planner.
-- [`facebook-live-group-poster/`](facebook-live-group-poster/) imports Facebook **Your groups**, lets the operator save an exact checkbox selection, and posts one Facebook Live link with text and hashtags only to those saved destinations.
-- [`linkedin-campaign-uploader/`](linkedin-campaign-uploader/) schedules one day-matched image or video post per day on LinkedIn.
-- [`youtube-campaign-uploader/`](youtube-campaign-uploader/) schedules one day-matched video or Short per day on the verified 3S Verse channel.
+## How the work is divided: text, hashtags, files, posting
 
-A local-first Chrome extension that imports every group joined by the Facebook account in your existing Chrome profile and posts a campaign to them sequentially.
+**Text.** Extensions 1 and 2 take the message from a textarea the operator pastes into. Extensions 3, 4, and 5 never ask for text — they read it from the campaign Markdown: every `## Day N — Title` block becomes one scheduled post, and the block's lines (after removing image markup and `**Campaign stage:**`-style annotations) become the caption. Paragraph breaks are preserved exactly.
 
-## What it does
+**Hashtags.** Hashtags are ordinary caption lines everywhere. Paste them at the end of the caption for extensions 1, 3, 4, and 5. Extension 2 has a separate hashtags box because its message and link layout is fixed; both boxes are saved so the next campaign starts with the last used text.
 
-- Opens Facebook **Your groups**, scrolls the complete joined-groups list, captures the direct group URLs, and deduplicates them automatically.
-- Reuses an existing Facebook tab, or opens one if needed.
-- Waits for slow pages, opens each joined group by its direct URL, opens the composer, fills the caption, and attaches the selected image or video.
-- Verifies the caption, selected media preview, and enabled Facebook **Post** button before publishing.
-- Remembers posted progress, waits 30 seconds between groups, and stops on the first error to avoid duplicates.
+**File picking.**
+- Extension 1 uses a single-file picker (any image, or `mp4`/`webm` video). No file chosen means a text-only post. The chosen media is stored in extension storage immediately and survives popup closes.
+- Extension 2 needs no files at all — Live posts are link + text + hashtags only.
+- Extensions 3, 4, and 5 use folder pickers (`webkitdirectory`): link one campaign folder, or a second one when media is split across two folders. Every file inside is scanned, so `images/` and `videos/` subfolders are welcome but not required — media is matched by day number in the filename.
 
-## What it intentionally does not do
+**Posting.** All five follow the same discipline: nothing posts until the operator explicitly clicks the start button; each destination is handled one at a time; progress is persisted locally so a closed popup never loses position; the run stops on the first error instead of duplicating; and a Stop button ends the campaign before the next destination.
 
-- It does not bypass Facebook login, account checks, rate limits, group rules, or moderation.
-- It only starts publishing after you explicitly click **Start auto-post campaign** for the imported joined-groups list, caption, and selected media.
-- It does not scrape members or collect personal data.
-- It cannot bypass Facebook throttling or future Facebook layout changes; errors stop the campaign and remain visible in the popup.
+## Campaign folder — what goes in it
+
+Extensions 3, 4, and 5 are driven by one folder (or two). Build it like this:
+
+```
+3SVerse_30_Day_Social_Campaign_Bundle/
+├── campaign.md            ← the first .md containing "## Day N" headings is used
+├── day-1.mp4              ← Reel / video for Day 1
+├── day-1.jpg              ← image for Day 1 (post / story)
+├── reel-2.mp4             ← "reel" prefix matches too
+├── day-2.jpg
+└── ...                    ← or organize into images/ and videos/ subfolders;
+                              files are matched by name, so folders are optional
+```
+
+**The Markdown.** Each day is a `## Day N — Title` heading. Everything after the heading until `---` (or the next Day heading) is the caption for that day:
+
+```markdown
+## Day 1 — Stop Losing Rebates
+
+Your caption line one.
+Your caption line two.
+
+#3SVerse #VidaPay #Rebates
+
+---
+```
+
+Lines that start with `![` (image markup), `[image]`/`[video]`/`[reel]`/`[creative]` tags, or `**Campaign stage:**`/`**Creative hook:**`/`**CTA:**` annotations are filtered out of the caption automatically. Hashtag lines stay in.
+
+**The media names.** A media file is matched to a day by the first `day`/`reel` number found in its filename: `day-1.mp4`, `day_2.jpg`, `reel-3.mp4`, `Day 4.png` all work (numbers 1–99; YouTube accepts up to 999). Media with no day number in the name is ignored, and a Day whose media is missing simply does not enter that extension's queue.
+
+**Who consumes what:**
+
+| Extension | Reads | Queue rule |
+|-----------|-------|-----------|
+| Meta Planner Scheduler | Day captions + videos (Reels) + images (posts/Stories) | Per day: Reel if the checkbox is on and a video exists; image post if an image exists; Story from either |
+| LinkedIn Campaign Uploader | Day captions + one chosen type (Images or Videos) | One post per day, using the day's image or video for the selected type |
+| YouTube Campaign Uploader | Day captions + videos only | One video or Short per day |
+
+**Dates.** The chosen start date belongs to the first day in the queue — resuming at Day 2 schedules Day 2 on the start date itself, not a day later. Each entry lands on start date + (day − first queued day) at the chosen time (default 09:00; the first day can take a different time in Meta).
+
+## Workflows
+
+### 1. Facebook Group Posting (root)
+
+1. Pin the extension and stay signed into Facebook in Chrome.
+2. Paste the campaign caption (hashtags included) and optionally pick one image or video.
+3. Click **Import joined groups** — the background opens Facebook **Your groups**, scrolls the complete list, resolves every direct group URL, and fills the checklist. The list and the checked/unchecked ticks are saved in the background, so closing the popup never loses them, and re-importing keeps the operator's selection while adding newly found groups.
+4. Filter with the search box, tick stores individually or with **Select all visible**.
+5. Click **Start auto-post campaign** once. The worker opens each selected group by its direct URL, clears stale drafts, inserts the caption with paragraph breaks, attaches and verifies the media, publishes, waits 30 seconds, and continues. It stops on the first error; **Open Facebook review tab** shows progress and **Stop campaign** halts before the next group.
+6. A media file with no picker selection means text-only posts; the stored-media card shows the saved filename with Replace/Clear buttons.
+
+### 2. Facebook Live Group Poster
+
+1. Enter the Facebook Live link, the message above it, and the hashtags.
+2. **Import / refresh Your groups** fills the joined-groups checklist; **Save group selection** stores the exact ticked groups so future campaigns reuse them untouched.
+3. **Start selected-groups campaign** posts the link + text + hashtags only to the saved destinations, one group at a time, stopping on the first error. The live link, message, and hashtags are also saved between sessions.
+
+### 3. Meta Planner Scheduler
+
+1. Link campaign folder 1 (and folder 2 when the campaign is split).
+2. Tick the content types to schedule — Reels, image posts, Stories — pick the start date and time, and resume at any Day.
+3. Review the queue preview, then start: the extension drives Meta Business Suite Planner, sets both platform date fields, and activates Schedule reliably (with retries) before moving on. Days without the required media are skipped in the preview so nothing is half-scheduled.
+
+### 4. LinkedIn Campaign Uploader
+
+1. Link the campaign folder(s) and choose daily Images or Videos.
+2. The queue shows one day-matched post per day with the complete caption and hashtags from the Markdown.
+3. Start to schedule each post on the 3S Verse company page through LinkedIn's native composer and uploader.
+
+### 5. YouTube Campaign Uploader
+
+1. Link the campaign folder(s) containing the Markdown and day-named videos.
+2. The queue shows one video or Short per day with its caption.
+3. Start to upload and schedule each video on the verified 3S Verse channel through YouTube Studio, one upload at a time with persistent daily progress.
+
+## Saved state and persistence (Downloads-deletion safe)
+
+- **Joined-groups lists** (extensions 1 and 2) persist in background `chrome.storage` the moment an import finishes — the popup merely mirrors it. Owner can close the popup, scroll Facebook, or restart Chrome; reopening shows the full checklist with previous ticks intact. Re-import merges instead of discarding.
+- **Campaign media in extension 1** is stored in extension storage for the running campaign and survives popup/panel restarts.
+- **Campaign files in extensions 3, 4, and 5** are copied into an IndexedDB vault (`3sverseAssetVaultV1`) the moment a folder is linked. The Markdown, images, and videos all live inside the extension, so the original folder can be deleted from `Downloads` afterwards and the queue still rebuilds completely on the next app open. Relinking a folder replaces that slot's copies; **Clear saved file copies** wipes the vault on demand. Unchanged files are skipped by size + modification time so relinking is fast.
+- Campaign text, progress, and selections are stored only in Chrome's local extension storage. No 3SVerse server receives Facebook, LinkedIn, Meta, or YouTube credentials or content.
 
 ## Install in Chrome
 
-1. Download and unzip this repository.
-2. Open `chrome://extensions`.
-3. Turn on **Developer mode**.
-4. Click **Load unpacked** and choose this folder.
-5. Pin **3SVerse Facebook Group Posting**.
-6. Stay signed into Facebook in Chrome.
+1. Download and unzip this repository (or load any subfolder separately — each extension is self-contained).
+2. Open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked**, and choose the extension folder:
+   - root folder → Facebook Group Posting
+   - `facebook-live-group-poster/` → Facebook Live Group Poster
+   - `meta-planner-scheduler/` → Meta Planner Scheduler
+   - `linkedin-campaign-uploader/` → LinkedIn Campaign Uploader
+   - `youtube-campaign-uploader/` → YouTube Campaign Uploader
+3. Pin all five and stay signed into the matching site in Chrome.
 
-## Use
+## What the assistant intentionally does not do
 
-1. Paste one approved campaign caption.
-2. Optionally choose its image or video.
-3. Click **Start auto-post campaign** once. This confirms publishing to every group listed in Facebook **Your groups**.
-4. Leave Chrome running. The assistant imports the complete joined-groups list, opens each direct group URL, replaces stale composer text, preserves paragraph breaks, attaches and verifies the chosen media when present, publishes, then waits 30 seconds before the next group.
-5. Use **Open Facebook review tab** to watch progress or **Stop campaign** to stop before the next post.
+- It does not bypass Facebook, LinkedIn, Meta, or YouTube login, account checks, rate limits, group rules, or moderation.
+- It only publishes after an explicit start click for the displayed campaign.
+- It does not scrape members or collect personal data.
+- It cannot bypass platform throttling or future layout changes; errors stop the campaign and remain visible in the popup.
 
-If the file chooser says **No file chosen**, the full campaign is posted as text-only. A selected reel or image is stored locally for the running campaign and reused for every listed group.
+## Recent versions
 
-Version 1.0.2 recognizes Facebook's current group-search cards by their profile-photo accessibility label, opens the exact result, and verifies the destination from the group page title before preparing the composer.
-
-Version 1.0.3 scopes text entry to Facebook's active **Create post** dialog, ignores the covered background-feed textbox, prevents duplicate caption insertion, and confirms the dialog's Post button is enabled before marking a group prepared.
-
-Version 1.0.4 replaces any stale draft instead of appending to it, inserts caption line breaks explicitly, scopes the file input to the active **Create post** dialog, and waits for a visible media preview before marking a reel or image as attached.
-
-Version 1.0.5 adds a separate **Post this prepared draft** confirmation button. It publishes the currently reviewed Facebook composer—even while the Facebook tab is unfocused—and advances the campaign only after Facebook closes the composer. Each group still requires an explicit click after review.
-
-Version 1.0.6 changes that flow to one-click sequential posting. **Start auto-post campaign** confirms the whole displayed campaign; the background worker posts one group at a time, waits 30 seconds, resumes through a Chrome alarm, persists progress locally, and stops on the first error. Facebook line breaks now use editor paragraphs rather than unsupported line-break insertion.
-
-Version 1.0.7 replaces synthetic DOM caption typing with Chrome DevTools Protocol trusted input for Facebook's Lexical editor. The complete caption—including blank lines between the website and hashtags—is inserted in one operation and must pass an exact normalized-text check before media or posting continues. Selected media is saved immediately in local extension storage and remains available after the popup/panel is reopened or a Facebook error stops the campaign; the hint shows the stored filename even though browsers do not permit repopulating the native file chooser display.
-
-Version 1.0.8 removes general Facebook search and every partial-name fallback from campaign routing. At Start, the assistant opens Facebook **Your groups**, scans and scrolls `All groups you've joined`, resolves every requested entry to an exact joined-group URL, and only then starts posting. A missing name stops the campaign. If multiple joined groups have the same exact name, it stops and lists their URLs so the owner can select the intended destination without guessing.
-
-Version 1.0.9 removes the duplicate-name URL burden. If several joined groups have the same exact title, one campaign entry automatically expands to every exact match; resolved URLs are deduplicated so no destination is posted twice. Partial matches remain forbidden and missing exact names still stop before posting.
-
-Version 1.1.0 removes the group-entry field completely. At Start, the assistant reads and scrolls Facebook **Your groups**, imports every joined group by its direct URL, deduplicates repeated cards by Facebook group ID, and uses that complete list as the campaign. The operator only supplies post text and optional media.
-
-Meta Business Suite remains the recommended scheduler for Facebook Page and Instagram posts. YouTube Studio remains the recommended scheduler for YouTube. Facebook does not provide a dependable public API for automatically posting to every group a personal account has joined.
-
-## Privacy
-
-Campaign text and progress are stored only in Chrome's local extension storage. Selected media stays local and is passed directly to the Facebook composer. No 3SVerse server receives Facebook credentials or content.
+- **FB Group Posting v1.5.0** — background persistence for the joined-groups checklist (popup-close no longer loses the list; ticks survive re-import); manifest-driven footer version.
+- **FB Live Poster v1.3.0** — same background persistence for its saved selection and content.
+- **Meta v1.6.0 / LinkedIn v1.3.0 / YouTube v1.2.0** — campaign folders copied into the IndexedDB asset vault (Downloads deletion safe), automatic queue rebuild from the vault, Clear saved file copies button.
+- **FB Group Posting v1.4.0** — virtualized-list harvest step-scrolls Facebook's group window so very large lists import completely, with partial-import merge.
 
 ## License
 
