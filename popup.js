@@ -2,6 +2,46 @@ const $ = selector => document.querySelector(selector);
 let campaign = { caption: "", facebookTabId: null };
 let runState = { active: false, index: 0, posted: 0, total: 0, status: "Ready." };
 let storedMedia = null;
+let groups = [];
+let selectedIds = new Set();
+
+function identity(url) {
+  try {
+    return new URL(url).pathname.match(/^\/groups\/([^/]+)/i)?.[1]?.toLowerCase() || "";
+  } catch (_) {
+    return "";
+  }
+}
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, ch => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  })[ch]);
+}
+
+function selectedCount() {
+  $("#selectedCount").textContent = `${selectedIds.size} selected`;
+}
+
+function renderGroups() {
+  if (!groups.length) return;
+  const filter = $("#groupSearch").value.trim().toLowerCase();
+  const visible = groups.filter(group => !filter || group.name.toLowerCase().includes(filter));
+  $("#groupList").innerHTML = visible.length ? visible.map(group => {
+    const id = identity(group.url);
+    return `<div class="group"><input class="groupCheck" id="g-${id}" data-id="${id}" type="checkbox" ${selectedIds.has(id) ? "checked" : ""}><label for="g-${id}">${escapeHtml(group.name)}<small>${escapeHtml(group.url)}</small></label></div>`;
+  }).join("") : '<p class="hint">No matching joined groups.</p>';
+  for (const checkbox of document.querySelectorAll(".groupCheck")) checkbox.addEventListener("change", () => {
+    checkbox.checked ? selectedIds.add(checkbox.dataset.id) : selectedIds.delete(checkbox.dataset.id);
+    selectedCount();
+    persistGroupPick();
+  });
+  selectedCount();
+}
+
+async function persistGroupPick() {
+  await chrome.storage.local.set({ importedGroupsStore: { groups, selectedIds: [...selectedIds] } });
+}
 
 function paint() {
   const total = runState.total || 0;
@@ -47,16 +87,18 @@ async function mediaPayload() {
 async function startCampaign() {
   await saveCampaign();
   if (!campaign.caption) throw new Error("Add the post text.");
+  if (!selectedIds.size) throw new Error("Import your groups and select at least one (or tap Select all visible).");
 
   $("#prepare").disabled = true;
   $("#prepare").textContent = "Starting…";
   const media = await mediaPayload();
   const hasMedia = Boolean(media?.bytes?.length);
   await chrome.storage.local.set({ autoCampaignMedia: media });
-  setStatus(`Opening Facebook Your groups and collecting every joined group${hasMedia ? " with the selected reel/image stored" : " for a text-only campaign"}…`);
+  setStatus(`Opening Facebook Your groups and collecting the list${hasMedia ? " with the selected reel/image stored" : " for the selected stores"}…`);
   const response = await chrome.runtime.sendMessage({
     type: "START_CAMPAIGN",
-    caption: campaign.caption
+    caption: campaign.caption,
+    selected: [...selectedIds]
   });
   if (!response?.ok) throw new Error(response?.error || "Campaign could not start.");
   runState = response.state || runState;
@@ -73,6 +115,40 @@ async function stopCampaign() {
   paint();
   setStatus(runState.status || "Campaign stopped.");
 }
+
+$("#importGroups").addEventListener("click", async () => {
+  const button = $("#importGroups");
+  try {
+    button.disabled = true;
+    setStatus("Opening Facebook Your groups and scrolling the complete joined-groups list…");
+    const response = await chrome.runtime.sendMessage({ type: "IMPORT_GROUPS" });
+    if (!response?.ok) throw new Error(response?.error || "Joined groups could not be imported.");
+    groups = response.groups || [];
+    selectedIds = new Set(groups.map(group => identity(group.url)).filter(Boolean));
+    await persistGroupPick();
+    $("#groupSearch").hidden = false;
+    $("#selectAllRow").hidden = false;
+    $("#selectAll").checked = true;
+    renderGroups();
+    setStatus(`Imported ${groups.length} joined groups. Uncheck any store you want to skip, then start.`);
+  } catch (error) {
+    setStatus(error.message, true);
+  } finally {
+    button.disabled = false;
+  }
+});
+
+$("#groupSearch").addEventListener("input", renderGroups);
+
+$("#selectAll").addEventListener("change", () => {
+  const filter = $("#groupSearch").value.trim().toLowerCase();
+  for (const group of groups.filter(group => !filter || group.name.toLowerCase().includes(filter))) {
+    const id = identity(group.url);
+    $("#selectAll").checked ? selectedIds.add(id) : selectedIds.delete(id);
+  }
+  renderGroups();
+  persistGroupPick();
+});
 
 $("#save").addEventListener("click", () => saveCampaign().catch(error => setStatus(error.message, true)));
 $("#prepare").addEventListener("click", () => startCampaign().catch(error => {
@@ -128,11 +204,19 @@ chrome.storage.onChanged.addListener(changes => {
   setStatus(runState.status || "Campaign updated.", Boolean(runState.error));
 });
 
-chrome.storage.local.get(["campaign", "autoCampaign", "autoCampaignMedia"]).then(result => {
+chrome.storage.local.get(["campaign", "autoCampaign", "autoCampaignMedia", "importedGroupsStore"]).then(result => {
   if (result.campaign) campaign = { ...campaign, ...result.campaign };
   if (result.autoCampaign) runState = { ...runState, ...result.autoCampaign };
   if (result.autoCampaignMedia?.bytes?.length) {
     storedMedia = result.autoCampaignMedia;
+  }
+  if (Array.isArray(result.importedGroupsStore?.groups) && result.importedGroupsStore.groups.length) {
+    groups = result.importedGroupsStore.groups;
+    selectedIds = new Set(result.importedGroupsStore.selectedIds || []);
+    $("#groupSearch").hidden = false;
+    $("#selectAllRow").hidden = false;
+    $("#selectAll").checked = selectedIds.size === groups.length;
+    renderGroups();
   }
   $("#caption").value = campaign.caption;
   paintStoredMedia();

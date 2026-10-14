@@ -14,7 +14,7 @@
   <main>
     <section class="joinedGroupsNotice">
       <strong>Facebook groups</strong>
-      <small>No group names or URLs needed. At Start, the assistant opens Facebook Your groups, scrolls the complete joined-groups list, and posts to each joined group once.</small>
+      <small>Import your joined groups, pick the stores that should receive this post, then start. Nothing is posted without your selection.</small>
     </section>
 
     <label for="caption">Post text</label>
@@ -31,6 +31,15 @@
     </div>
     <small id="mediaHint">Optional. Without a file, the assistant prepares a text-only post.</small>
 
+    <section class="groupsCard">
+      <div class="row"><strong>Joined groups</strong><span id="selectedCount">0 selected</span></div>
+      <button id="importGroups" class="secondary" type="button">Import joined groups</button>
+      <input id="groupSearch" type="search" placeholder="Filter groups" hidden>
+      <label class="selectAll" id="selectAllRow" hidden><input id="selectAll" type="checkbox"> Select all visible</label>
+      <div id="groupList" class="groupList"></div>
+      <small id="groupHint">Import opens Facebook “Your groups”, scrolls the full list, and fills this checklist. Only checked groups get the post.</small>
+    </section>
+
     <section class="progress">
       <span id="counter">0 of 0 posted</span>
       <span id="groupName">No group selected</span>
@@ -46,7 +55,7 @@
       </div>
     </section>
   </main>
-  <footer>v1.2.0 · Your groups auto-import · 3sverse.com</footer>
+  <footer>v1.3.0 · Pick your groups · 3sverse.com</footer>
   <script src="popup.js"></script>
 </body>
 </html>

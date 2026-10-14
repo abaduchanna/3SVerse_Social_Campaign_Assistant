@@ -138,6 +138,37 @@ function send(message) {
     "https://www.facebook.com/groups/333/",
     "https://www.facebook.com/groups/444/"
   ]);
+
+  // v1.3.0: import-only flow returns the joined-groups list without starting anything
+  currentTab = { id: 7, status: "complete", url: "https://www.facebook.com/" };
+  joinedGroups = [
+    { name: "Store A", url: "https://www.facebook.com/groups/888/" },
+    { name: "Store B", url: "https://www.facebook.com/groups/999/" }
+  ];
+  const imported = await send({ type: "IMPORT_GROUPS" });
+  assert.equal(imported.ok, true);
+  assert.equal(imported.groups.length, 2);
+  assert.equal(data.autoCampaign.active, false);
+  assert.equal(data.autoCampaign.total, 0);
+  assert.match(data.autoCampaign.status, /Imported 2 joined groups/);
+
+  // v1.3.0: START_CAMPAIGN posts only to the selected group identities
+  const selective = await send({ type: "START_CAMPAIGN", caption: "Sel", selected: ["999"] });
+  assert.equal(selective.state.total, 1);
+  for (let attempt = 0; attempt < 100 && data.autoCampaign?.active; attempt += 1) {
+    await new Promise(resolve => setTimeout(resolve, 5));
+  }
+  assert.equal(data.autoCampaign.posted, 1);
+  assert.equal(data.autoCampaign.active, false);
+  assert.match(data.autoCampaign.status, /Campaign complete: 1 of 1 posted/);
+  assert.equal(preparedGroups.at(-1), "https://www.facebook.com/groups/999/");
+
+  // v1.3.0: a selection that matches nothing fails with a clear error
+  await assert.rejects(
+    send({ type: "START_CAMPAIGN", caption: "Sel", selected: ["404"] }),
+    /None of the selected groups matched/
+  );
+
   process.stdout.write("background campaign test passed\n");
 })().catch(error => {
   console.error(error);

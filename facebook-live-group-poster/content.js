@@ -16,21 +16,30 @@
     catch (_) { return ""; }
   }
 
+  function cleanName(raw) {
+    const lines = String(raw || "").split(/\n+/).map(l => l.replace(/\s+/g, " ").trim()).filter(Boolean);
+    const kept = lines.filter(l => !/last active|last visited/i.test(l) && !/^view group$/i.test(l)
+      && !/^\d[\d,.]*\s+members?$/i.test(l) && !/private group|public group/i.test(l));
+    return kept[0] || "";
+  }
+
   function groupsVisibleNow() {
     const map = new Map();
     for (const anchor of document.querySelectorAll('a[href*="/groups/"]')) {
       const id = groupId(anchor.href);
-      let name = (anchor.innerText || anchor.getAttribute("aria-label") || "").trim();
-      if (!name) name = (anchor.querySelector("img[alt]")?.alt || "").replace(/^profile photo of\s+/i, "").trim();
-      if (!id || ["feed","discover","joins"].includes(id) || !name || norm(name) === "view group" || /last active|last visited/i.test(name)) continue;
-      if (!map.has(id)) map.set(id, { name, url:`https://www.facebook.com/groups/${id}/` });
+      if (!id || ["feed","discover","joins","search","permalink"].includes(id)) continue;
+      const photoAlt = (anchor.querySelector("img[alt]")?.alt || "").replace(/^profile photo of\s+/i, "").trim();
+      const name = cleanName(photoAlt || anchor.getAttribute("aria-label") || anchor.innerText || "");
+      if (!map.has(id)) map.set(id, { name: "", url:`https://www.facebook.com/groups/${id}/` });
+      const entry = map.get(id);
+      if (!entry.name && name && norm(name) !== "view group") entry.name = name;
     }
-    return [...map.values()];
+    return [...map.values()].filter(g => g.name);
   }
 
   async function scanGroups() {
     if (!location.pathname.startsWith("/groups/joins")) throw new Error("Facebook Your groups page is not open.");
-    const countText = [...document.querySelectorAll("h1,h2,h3,[role=heading]")].map(e=>e.innerText||"").find(text=>/all groups you.ve joined\s*\(\d+\)/i.test(text));
+    const countText = [...document.querySelectorAll("h1,h2,h3,[role=heading]")].map(e=>e.innerText||"").find(text=>/(all\s+)?groups\s+you.?ve\s+joined\s*\(\d+\)/i.test(text));
     const expected = Number(countText?.match(/\((\d+)\)/)?.[1] || 0);
     const all = new Map();
     const collect = () => groupsVisibleNow().forEach(group => all.set(groupId(group.url), group));

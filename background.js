@@ -229,6 +229,28 @@ chrome.alarms.onAlarm.addListener(alarm => {
 chrome.runtime.onStartup.addListener(() => resumeCampaign());
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message.type === "IMPORT_GROUPS") {
+    (async () => {
+      const tab = await getFacebookTab();
+      await saveState({
+        active: false, tabId: tab.id, index: 0, posted: 0,
+        total: 0, status: "Reading and scrolling the complete Facebook Your groups list…", error: null
+      });
+      const joined = await loadJoinedGroups(tab.id);
+      const groups = allJoinedGroups(joined);
+      if (!groups.length) {
+        throw new Error("No joined Facebook groups were found. Open Facebook, confirm you are signed in, and retry.");
+      }
+      await saveState({
+        active: false, tabId: tab.id, index: 0, posted: 0, total: 0,
+        status: `Imported ${groups.length} joined groups. Choose which stores to post to, then start.`,
+        error: null
+      });
+      sendResponse({ ok: true, groups, count: groups.length });
+    })().catch(error => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
+
   if (message.type === "START_CAMPAIGN") {
     (async () => {
       await chrome.alarms.clear(CAMPAIGN_ALARM);
@@ -239,9 +261,15 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       };
       await saveState(resolvingState);
       const joined = await loadJoinedGroups(tab.id);
-      const targets = allJoinedGroups(joined);
+      const wanted = Array.isArray(message.selected)
+        ? new Set(message.selected.map(value => String(value).toLowerCase()))
+        : null;
+      const targets = allJoinedGroups(joined).filter(group =>
+        !wanted || wanted.has(groupIdentity(group.url)));
       if (!targets.length) {
-        throw new Error("No joined Facebook groups were found. Open Facebook, confirm you are signed in, and retry.");
+        throw new Error(wanted
+          ? "None of the selected groups matched the imported list. Import again and select at least one group."
+          : "No joined Facebook groups were found. Open Facebook, confirm you are signed in, and retry.");
       }
       const state = {
         active: true,
@@ -251,7 +279,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         index: 0,
         posted: 0,
         total: targets.length,
-        status: `Imported ${targets.length} joined groups from Facebook Your groups. Preparing 1 of ${targets.length}.`,
+        status: `Imported ${targets.length} selected groups from Facebook Your groups. Preparing 1 of ${targets.length}.`,
         error: null
       };
       await chrome.storage.local.set({ autoCampaign: state });

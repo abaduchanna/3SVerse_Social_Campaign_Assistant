@@ -72,16 +72,34 @@
     }
   }
 
+  const GROUP_NAME_NOISE = [
+    /^last active/i, /^last visited/i, /^view group$/i, /^\d[\d,.]*\s+members?$/i,
+    /private group/i, /public group/i, /^\u00b7+$/, /^\.\.\.$/, /^suggested for you$/i
+  ];
+
+  function cleanGroupName(raw) {
+    const lines = String(raw || "").split(/\n+/)
+      .map(line => line.replace(/\s+/g, " ").trim())
+      .filter(Boolean);
+    const kept = lines.filter(line => !GROUP_NAME_NOISE.some(rx => rx.test(line)));
+    return kept[0] || "";
+  }
+
   function joinedGroupsOnPage() {
     const groups = new Map();
     for (const anchor of document.querySelectorAll('a[href*="/groups/"]')) {
       const identity = groupIdentity(anchor.href);
-      const name = (anchor.innerText || anchor.getAttribute("aria-label") || "").trim();
-      if (!identity || ["feed", "discover", "joins"].includes(identity)) continue;
-      if (!name || normalize(name) === "view group" || /last active/i.test(name)) continue;
-      if (!groups.has(identity)) groups.set(identity, { name, url: `https://www.facebook.com/groups/${identity}/` });
+      if (!identity || ["feed", "discover", "joins", "search", "permalink"].includes(identity)) continue;
+      const photoAlt = anchor.querySelector("img[alt]")?.getAttribute("alt") || "";
+      const photoName = photoAlt.replace(/^profile photo of\s+/i, "").trim();
+      const name = cleanGroupName(photoName || anchor.getAttribute("aria-label") || anchor.innerText || "");
+      if (!groups.has(identity)) {
+        groups.set(identity, { name: "", url: `https://www.facebook.com/groups/${identity}/` });
+      }
+      const entry = groups.get(identity);
+      if (!entry.name && name && normalize(name) !== "view group") entry.name = name;
     }
-    return [...groups.values()];
+    return [...groups.values()].filter(group => group.name);
   }
 
   async function scanJoinedGroups() {
@@ -90,7 +108,7 @@
     }
     const expectedText = [...document.querySelectorAll("h1,h2,h3,[role=heading]")]
       .map(element => element.innerText || "")
-      .find(text => /all groups you.ve joined\s*\(\d+\)/i.test(text));
+      .find(text => /(all\s+)?groups\s+you.?ve\s+joined\s*\(\d+\)/i.test(text));
     const expected = Number(expectedText?.match(/\((\d+)\)/)?.[1] || 0);
     const collected = new Map();
     const collectVisible = () => {
