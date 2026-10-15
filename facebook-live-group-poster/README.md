@@ -15,3 +15,7 @@ Version 1.1.0 uses the Facebook icon and enables trusted text input while the Fa
 The extension never uses partial group-name search. It stops on the first Facebook error to prevent wrong-group or duplicate posting.
 
 MIT license (repository root).
+
+---
+
+**Folder automation:** see [../CAMPAIGN-FOLDERS.md](../CAMPAIGN-FOLDERS.md) for this extension's exact folder layout, day-number file-naming rules, and copy-paste AI generation prompts.

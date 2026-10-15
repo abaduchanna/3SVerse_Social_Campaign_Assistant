@@ -64,3 +64,7 @@ Stories do not support an ordinary feed caption. The Story option schedules the 
 Files stay local until the operator starts scheduling. They are then uploaded directly to Meta Business Suite from the signed-in Chrome profile. The extension does not receive passwords, bypass Meta checks, or use a 3SVerse server.
 
 MIT license (repository root).
+
+---
+
+**Folder automation:** see [../CAMPAIGN-FOLDERS.md](../CAMPAIGN-FOLDERS.md) for this extension's exact folder layout, day-number file-naming rules, and copy-paste AI generation prompts.

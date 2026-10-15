@@ -33,3 +33,7 @@ Separate Chrome extension for the **3S Verse LinkedIn company page**. It does no
 The linked folder is the normal upload source. Windows paths are optional fallbacks only.
 
 The extension uses LinkedIn's live-inspected `Schedule post` fields (`Date`, `Time`, `Next`) and final `Schedule` action.
+
+---
+
+**Folder automation:** see [../CAMPAIGN-FOLDERS.md](../CAMPAIGN-FOLDERS.md) for this extension's exact folder layout, day-number file-naming rules, and copy-paste AI generation prompts.

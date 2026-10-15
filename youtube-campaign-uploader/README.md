@@ -11,3 +11,7 @@ Schedules one day-matched video/Short per campaign day on the exact **3S Verse**
 - Keeps persistent Pending, Running, Completed, Skipped and Failed status per campaign day and continues trusted automation while the Studio tab is unfocused.
 
 Install with Chrome `Load unpacked`, selecting this folder. Keep the unpacked folder in place while installed.
+
+---
+
+**Folder automation:** see [../CAMPAIGN-FOLDERS.md](../CAMPAIGN-FOLDERS.md) for this extension's exact folder layout, day-number file-naming rules, and copy-paste AI generation prompts.

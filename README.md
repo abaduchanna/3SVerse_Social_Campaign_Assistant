@@ -2,6 +2,8 @@
 
 Five local-first Chrome extensions in one repository that publish the same campaign everywhere 3SVerse posts: Facebook groups, Facebook Live destinations, the Facebook Page + Instagram (Meta Business Suite), the LinkedIn company page, and the 3SVerse YouTube channel. Nothing leaves the machine except what Facebook, LinkedIn, Meta, and YouTube themselves publish — no 3SVerse server ever sees credentials, captions, or media.
 
+**Folder automation:** [CAMPAIGN-FOLDERS.md](CAMPAIGN-FOLDERS.md) defines the exact per-extension folder layout (one folder per extension, named after it) plus copy-paste prompts that make any AI produce the videos, images, captions, and hashtags ready to drop in.
+
 ## The five extensions at a glance
 
 | # | Extension | Folder in this repo | What it publishes | Where it posts | Content source |
@@ -139,3 +141,7 @@ Lines that start with `![` (image markup), `[image]`/`[video]`/`[reel]`/`[creati
 ## License
 
 MIT © 2026 3SVerse
+
+---
+
+**Folder automation:** see [CAMPAIGN-FOLDERS.md](CAMPAIGN-FOLDERS.md) for the per-extension folder layout, day-number file-naming rules, and copy-paste AI generation prompts.
