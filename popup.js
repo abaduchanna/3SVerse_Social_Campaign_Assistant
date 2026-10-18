@@ -69,13 +69,24 @@ function setStatus(message, error = false) {
 }
 
 async function paintStoredMedia() {
-  const hasStoredMedia = Boolean(storedMedia?.bytes?.length);
+  const names = storedMediaFiles().map(file => file.name);
+  const hasStoredMedia = names.length > 0;
   $("#media").hidden = hasStoredMedia;
   $("#storedMediaCard").hidden = !hasStoredMedia;
-  $("#storedMediaName").textContent = hasStoredMedia ? `Stored reel/image: ${storedMedia.name}` : "";
+  $("#storedMediaName").textContent = hasStoredMedia
+    ? `Stored media (${names.length}): ${names.join(", ")}`
+    : "";
   $("#mediaHint").textContent = hasStoredMedia
-    ? "Saved inside the extension — this copy is uploaded to every group even after you delete the original from Downloads."
-    : "Optional. Without a file, every group receives a text-only post.";
+    ? "Saved inside the extension — every selected group receives ALL of these files, even after you delete the originals from Downloads."
+    : "Optional. Select as many photos/videos as you like (Ctrl+click) — every group gets all of them. Without files, groups get a text-only post.";
+}
+
+/** v1.6.0: stored media may be the new multi-file shape {files:[...]} or the
+ *  legacy single-file shape {name,type,bytes} — always return a list. */
+function storedMediaFiles() {
+  if (Array.isArray(storedMedia?.files) && storedMedia.files.length) return storedMedia.files;
+  if (storedMedia?.bytes?.length) return [storedMedia];
+  return [];
 }
 
 async function saveCampaign() {
@@ -86,10 +97,14 @@ async function saveCampaign() {
 }
 
 async function mediaPayload() {
-  const file = $("#media").files[0];
-  if (!file) return storedMedia;
-  if (file.size > 50 * 1024 * 1024) throw new Error("Choose a media file smaller than 50 MB.");
-  return { name: file.name, type: file.type, bytes: [...new Uint8Array(await file.arrayBuffer())] };
+  const picked = [...$("#media").files];
+  if (!picked.length) return storedMedia;
+  const files = [];
+  for (const file of picked) {
+    if (file.size > 50 * 1024 * 1024) throw new Error(`"${file.name}" is larger than 50 MB — choose a smaller file.`);
+    files.push({ name: file.name, type: file.type || "application/octet-stream", bytes: [...new Uint8Array(await file.arrayBuffer())] });
+  }
+  return { files };
 }
 
 async function startCampaign() {
@@ -100,9 +115,9 @@ async function startCampaign() {
   $("#prepare").disabled = true;
   $("#prepare").textContent = "Starting…";
   const media = await mediaPayload();
-  const hasMedia = Boolean(media?.bytes?.length);
+  const mediaCount = Array.isArray(media?.files) ? media.files.length : (media?.bytes?.length ? 1 : 0);
   await chrome.storage.local.set({ autoCampaignMedia: media });
-  setStatus(`Opening Facebook Your groups and collecting the list${hasMedia ? " with the selected reel/image stored" : " for the selected stores"}…`);
+  setStatus(`Opening Facebook Your groups and collecting the list${mediaCount ? ` with ${mediaCount} media file(s) stored` : " for the selected stores"}…`);
   const response = await chrome.runtime.sendMessage({
     type: "START_CAMPAIGN",
     caption: campaign.caption,
@@ -190,8 +205,7 @@ $("#reset").addEventListener("click", async () => {
 });
 
 $("#media").addEventListener("change", async () => {
-  const file = $("#media").files[0];
-  if (!file) return;
+  if (!$("#media").files.length) return;
   try {
     storedMedia = await mediaPayload();
     await chrome.storage.local.set({ autoCampaignMedia: storedMedia });
@@ -232,8 +246,8 @@ chrome.storage.onChanged.addListener(changes => {
 chrome.storage.local.get(["campaign", "autoCampaign", "autoCampaignMedia", "importedGroupsStore"]).then(result => {
   if (result.campaign) campaign = { ...campaign, ...result.campaign };
   if (result.autoCampaign) runState = { ...runState, ...result.autoCampaign };
-  if (result.autoCampaignMedia?.bytes?.length) {
-    storedMedia = result.autoCampaignMedia;
+  if (result.autoCampaignMedia?.files?.length || result.autoCampaignMedia?.bytes?.length) {
+    storedMedia = result.autoCampaignMedia;   // legacy single-file shape handled by storedMediaFiles()
   }
   if (Array.isArray(result.importedGroupsStore?.groups) && result.importedGroupsStore.groups.length) {
     groups = result.importedGroupsStore.groups;

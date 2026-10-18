@@ -199,7 +199,12 @@
       throw new Error("Facebook did not retain the full caption exactly. Nothing was posted.");
     }
 
-    if (media?.bytes?.length) {
+    // v1.6.0: multi-file — stored media may be {files:[...]} (new) or a legacy
+    // single {name,type,bytes}; every group receives ALL files in one upload.
+    const mediaFiles = Array.isArray(media?.files) && media.files.length
+      ? media.files
+      : (media?.bytes?.length ? [media] : []);
+    if (mediaFiles.length) {
       // Let Facebook finish any URL-card preview first so it cannot be mistaken for the selected file.
       await sleep(1500);
       const input = await waitFor(() => [...dialog.querySelectorAll('input[type="file"]')].find(input =>
@@ -209,10 +214,11 @@
         const rect = element.getBoundingClientRect();
         return rect.width >= 180 && rect.height >= 90;
       }));
-      const bytes = new Uint8Array(media.bytes);
-      const file = new File([bytes], media.name, { type: media.type || "video/mp4" });
       const transfer = new DataTransfer();
-      transfer.items.add(file);
+      for (const one of mediaFiles) {
+        const bytes = new Uint8Array(one.bytes);
+        transfer.items.add(new File([bytes], one.name, { type: one.type || "application/octet-stream" }));
+      }
       input.files = transfer.files;
       input.dispatchEvent(new Event("change", { bubbles: true }));
 
@@ -226,7 +232,7 @@
       const postButton = [...dialog.querySelectorAll('[role="button"], button')]
         .find(button => normalize(button.innerText || button.getAttribute("aria-label")) === "post");
       return postButton && !postButton.matches(':disabled,[aria-disabled="true"]');
-    }, media?.bytes?.length ? 60000 : 15000);
+    }, mediaFiles.length ? 60000 : 15000);
 
     return {
       ok: true,

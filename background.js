@@ -1,7 +1,13 @@
 const FACEBOOK_HOME = "https://www.facebook.com/";
 const JOINED_GROUPS_URL = "https://www.facebook.com/groups/joins/?nav_source=tab&ordering=viewer_added";
 const CAMPAIGN_ALARM = "3sverse-campaign-next";
-const POST_INTERVAL_MINUTES = 0.5;
+// v1.6.0: 30s → 12s (owner: "30 sec wait time ko reduce kar 10-15 sec kar de").
+// chrome.alarms clamps delays under 30s, so the wait now happens INSIDE the
+// running worker (setTimeout) and the alarm is only a 1.5-minute safety net
+// that resumes the campaign if Chrome kills the worker mid-wait.
+// v1.6.0: wait is overridable for the node test (real Chrome always uses 12s).
+const POST_INTERVAL_MS = (typeof globalThis !== "undefined" && globalThis.__POST_INTERVAL_MS) || 12000;
+const RESUME_ALARM_MINUTES = 1.5;
 let campaignBusy = false;
 
 async function getFacebookTab() {
@@ -178,64 +184,71 @@ async function resumeCampaign() {
   if (campaignBusy) return;
   campaignBusy = true;
   try {
-    const stored = await chrome.storage.local.get(["autoCampaign", "autoCampaignMedia"]);
-    const state = stored.autoCampaign;
-    const media = stored.autoCampaignMedia || null;
-    if (!state?.active) return;
-    if (!state.targets?.length) throw new Error("Exact joined-group targets are missing. Start the campaign again.");
-    if (state.index >= state.targets.length) {
-      state.active = false;
-      state.status = `Campaign complete: ${state.posted} of ${state.total} posted.`;
+    while (true) {
+      const stored = await chrome.storage.local.get(["autoCampaign", "autoCampaignMedia"]);
+      const state = stored.autoCampaign;
+      const media = stored.autoCampaignMedia || null;
+      if (!state?.active) return;
+      if (!state.targets?.length) throw new Error("Exact joined-group targets are missing. Start the campaign again.");
+      if (state.index >= state.targets.length) {
+        state.active = false;
+        state.status = `Campaign complete: ${state.posted} of ${state.total} posted.`;
+        await saveState(state);
+        return;
+      }
+
+      const target = state.targets[state.index];
+      const group = target.url;
+      state.status = `Preparing ${state.index + 1} of ${state.total}: ${target.name}`;
+      state.error = null;
       await saveState(state);
-      return;
-    }
+      const tab = await chrome.tabs.get(state.tabId);
+      const prepared = await prepareThroughNavigation(tab, {
+        type: "PREPARE_POST",
+        group
+      });
+      if (!prepared?.ok || !prepared.editorReady) throw new Error(prepared?.error || "Facebook editor did not become ready.");
+      await insertCaptionWithDebugger(state.tabId, state.caption);
+      const verified = await chrome.tabs.sendMessage(state.tabId, {
+        type: "VERIFY_COMPOSER",
+        caption: state.caption,
+        media
+      });
+      if (!verified?.ok || !verified.prepared) throw new Error(verified?.error || "Facebook draft verification failed.");
 
-    const target = state.targets[state.index];
-    const group = target.url;
-    state.status = `Preparing ${state.index + 1} of ${state.total}: ${target.name}`;
-    state.error = null;
-    await saveState(state);
-    const tab = await chrome.tabs.get(state.tabId);
-    const prepared = await prepareThroughNavigation(tab, {
-      type: "PREPARE_POST",
-      group
-    });
-    if (!prepared?.ok || !prepared.editorReady) throw new Error(prepared?.error || "Facebook editor did not become ready.");
-    await insertCaptionWithDebugger(state.tabId, state.caption);
-    const verified = await chrome.tabs.sendMessage(state.tabId, {
-      type: "VERIFY_COMPOSER",
-      caption: state.caption,
-      media
-    });
-    if (!verified?.ok || !verified.prepared) throw new Error(verified?.error || "Facebook draft verification failed.");
+      const beforePublish = (await chrome.storage.local.get("autoCampaign")).autoCampaign;
+      if (!beforePublish?.active) return;
 
-    const beforePublish = (await chrome.storage.local.get("autoCampaign")).autoCampaign;
-    if (!beforePublish?.active) return;
-
-    state.status = `Posting ${state.index + 1} of ${state.total}: ${target.name}`;
-    await saveState(state);
-    await ensureContentScript(state.tabId);
-    const posted = await chrome.tabs.sendMessage(state.tabId, { type: "PUBLISH_POST", group });
-    if (!posted?.ok || !posted.posted) throw new Error(posted?.error || "Facebook did not confirm the post.");
-
-    const afterPublish = (await chrome.storage.local.get("autoCampaign")).autoCampaign;
-    state.index += 1;
-    state.posted += 1;
-    if (!afterPublish?.active) {
-      state.active = false;
-      state.status = `Campaign stopped. ${state.posted} of ${state.total} posted.`;
+      state.status = `Posting ${state.index + 1} of ${state.total}: ${target.name}`;
       await saveState(state);
-      return;
-    }
-    if (state.index >= state.targets.length) {
-      state.active = false;
-      state.status = `Campaign complete: ${state.posted} of ${state.total} posted.`;
+      await ensureContentScript(state.tabId);
+      const posted = await chrome.tabs.sendMessage(state.tabId, { type: "PUBLISH_POST", group });
+      if (!posted?.ok || !posted.posted) throw new Error(posted?.error || "Facebook did not confirm the post.");
+
+      const afterPublish = (await chrome.storage.local.get("autoCampaign")).autoCampaign;
+      state.index += 1;
+      state.posted += 1;
+      if (!afterPublish?.active) {
+        state.active = false;
+        state.status = `Campaign stopped. ${state.posted} of ${state.total} posted.`;
+        await saveState(state);
+        return;
+      }
+      if (state.index >= state.targets.length) {
+        state.active = false;
+        state.status = `Campaign complete: ${state.posted} of ${state.total} posted.`;
+        await saveState(state);
+        return;
+      }
+      state.status = `Posted ${state.posted} of ${state.total}. Next group starts in 12 seconds.`;
       await saveState(state);
-      return;
+      // 12s wait INSIDE the worker; safety alarm resumes if Chrome kills us.
+      await chrome.alarms.create(CAMPAIGN_ALARM, { delayInMinutes: RESUME_ALARM_MINUTES });
+      await new Promise(resolve => setTimeout(resolve, POST_INTERVAL_MS));
+      const check = (await chrome.storage.local.get("autoCampaign")).autoCampaign;
+      if (!check?.active) return;
+      await chrome.alarms.clear(CAMPAIGN_ALARM); // loop continues — alarm not needed
     }
-    state.status = `Posted ${state.posted} of ${state.total}. Next group starts in 30 seconds.`;
-    await saveState(state);
-    await chrome.alarms.create(CAMPAIGN_ALARM, { delayInMinutes: POST_INTERVAL_MINUTES });
   } catch (error) {
     const stored = await chrome.storage.local.get("autoCampaign");
     const state = stored.autoCampaign || {};
@@ -316,9 +329,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         error: null
       };
       await chrome.storage.local.set({ autoCampaign: state });
-      await resumeCampaign();
-      const current = (await chrome.storage.local.get("autoCampaign")).autoCampaign;
-      sendResponse({ ok: !current?.error, state: current, error: current?.error });
+      // v1.6.0: resumeCampaign now LOOPS the whole campaign (12s gaps inside
+      // the worker), so it must NOT be awaited here — respond immediately and
+      // let the popup follow progress via storage.onChanged.
+      resumeCampaign().catch(() => {});
+      sendResponse({ ok: true, state });
     })().catch(error => sendResponse({ ok: false, error: error.message }));
     return true;
   }

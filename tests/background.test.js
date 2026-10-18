@@ -1,5 +1,9 @@
 const assert = require("node:assert/strict");
 
+// v1.6.0: the campaign loop now waits 12s between groups in real Chrome;
+// shrink it to 5ms here so the test stays fast.
+globalThis.__POST_INTERVAL_MS = 5;
+
 const data = { autoCampaignMedia: { name: "reel.mp4", bytes: [1, 2, 3] } };
 const sent = [];
 const debuggerCommands = [];
@@ -77,24 +81,21 @@ function send(message) {
 }
 
 (async () => {
+  // v1.6.0: START responds immediately (fire-and-forget loop) and the campaign
+  // self-drives to completion with 12s (here 5ms) gaps — no alarm needed.
   const started = await send({
     type: "START_CAMPAIGN",
     caption: "Line one\n\nhttps://3sverse.com\n#VidaPay"
   });
-  assert.equal(started.state.posted, 1);
   assert.equal(started.state.active, true);
-  assert.equal(scheduledAlarm.name, "3sverse-campaign-next");
-  assert.equal(scheduledAlarm.options.delayInMinutes, 0.5);
-  assert.ok(data.autoCampaignMedia);
-
-  alarmListener({ name: scheduledAlarm.name });
-  for (let attempt = 0; attempt < 100 && data.autoCampaign?.active; attempt += 1) {
+  for (let attempt = 0; attempt < 2000 && data.autoCampaign?.active; attempt += 1) {
     await new Promise(resolve => setTimeout(resolve, 5));
   }
-
   assert.equal(data.autoCampaign.posted, 2);
   assert.equal(data.autoCampaign.active, false);
   assert.equal(data.autoCampaign.status, "Campaign complete: 2 of 2 posted.");
+  assert.ok(data.autoCampaignMedia);
+  assert.equal(scheduledAlarm, null); // safety alarm cleared once the loop finished
   assert.equal(data.autoCampaignMedia.name, "reel.mp4");
   assert.equal(sent.filter(type => type === "PREPARE_POST").length, 2);
   assert.deepEqual(preparedGroups, [
@@ -124,10 +125,8 @@ function send(message) {
   ];
   const expanded = await send({ type: "START_CAMPAIGN", caption: "Test" });
   assert.equal(expanded.state.total, 2);
-  assert.equal(expanded.state.posted, 1);
   assert.equal(expanded.state.active, true);
-  alarmListener({ name: scheduledAlarm.name });
-  for (let attempt = 0; attempt < 100 && data.autoCampaign?.active; attempt += 1) {
+  for (let attempt = 0; attempt < 2000 && data.autoCampaign?.active; attempt += 1) {
     await new Promise(resolve => setTimeout(resolve, 5));
   }
   assert.equal(data.autoCampaign.posted, 2);
@@ -161,7 +160,7 @@ function send(message) {
   // v1.3.0: START_CAMPAIGN posts only to the selected group identities
   const selective = await send({ type: "START_CAMPAIGN", caption: "Sel", selected: ["999"] });
   assert.equal(selective.state.total, 1);
-  for (let attempt = 0; attempt < 100 && data.autoCampaign?.active; attempt += 1) {
+  for (let attempt = 0; attempt < 2000 && data.autoCampaign?.active; attempt += 1) {
     await new Promise(resolve => setTimeout(resolve, 5));
   }
   assert.equal(data.autoCampaign.posted, 1);
@@ -193,7 +192,7 @@ function send(message) {
   // v1.4.0: Start still works off the partial list — selected loaded groups post fine
   const partialStart = await send({ type: "START_CAMPAIGN", caption: "P", selected: ["771"] });
   assert.equal(partialStart.state.total, 1);
-  for (let attempt = 0; attempt < 100 && data.autoCampaign?.active; attempt += 1) {
+  for (let attempt = 0; attempt < 2000 && data.autoCampaign?.active; attempt += 1) {
     await new Promise(resolve => setTimeout(resolve, 5));
   }
   assert.equal(data.autoCampaign.posted, 1);

@@ -20,8 +20,8 @@
     <label for="caption">Post text</label>
     <textarea id="caption" rows="7" placeholder="Paste the campaign caption here"></textarea>
 
-    <label for="media">Image or video</label>
-    <input id="media" type="file" accept="image/*,video/mp4,video/webm">
+    <label for="media">Images / videos — multiple allowed</label>
+    <input id="media" type="file" accept="image/*,video/mp4,video/webm" multiple>
     <div id="storedMediaCard" class="storedMedia" hidden>
       <span id="storedMediaName"></span>
       <div>
@@ -29,7 +29,7 @@
         <button id="clearMedia" type="button" class="mediaAction">Clear</button>
       </div>
     </div>
-    <small id="mediaHint">Optional. Without a file, the assistant prepares a text-only post.</small>
+    <small id="mediaHint">Optional. Select as many photos/videos as you like (Ctrl+click) — every group gets all of them. Without files, groups get a text-only post.</small>
 
     <section class="groupsCard">
       <div class="row"><strong>Joined groups</strong><span id="selectedCount">0 selected</span></div>

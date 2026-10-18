@@ -8,7 +8,7 @@ Five local-first Chrome extensions in one repository that publish the same campa
 
 | # | Extension | Folder in this repo | What it publishes | Where it posts | Content source |
 |---|-----------|--------------------|-------------------|----------------|----------------|
-| 1 | **Facebook Group Posting** v1.5.0 | root | Caption text + hashtags + one optional image or video | Every joined Facebook group the operator ticks | Manual paste + single file picker |
+| 1 | **Facebook Group Posting** v1.6.0 | root | Caption text + hashtags + any number of images and/or videos | Every joined Facebook group the operator ticks | Manual paste + multi-file picker |
 | 2 | **Facebook Live Group Poster** v1.3.0 | `facebook-live-group-poster/` | A Facebook Live link + saved message + hashtags | A saved selection of joined groups | Manual paste (no media files) |
 | 3 | **Meta Planner Scheduler** v1.6.0 | `meta-planner-scheduler/` | Day-matched Reels (videos), image posts, and Stories | Facebook Page + Instagram via Meta Business Suite Planner | Campaign folder (Markdown + media) |
 | 4 | **LinkedIn Campaign Uploader** v1.3.0 | `linkedin-campaign-uploader/` | One day-matched image **or** video post per day | 3S Verse LinkedIn company page | Campaign folder (Markdown + media) |
@@ -23,7 +23,7 @@ Every extension reads its version from its own `manifest.json` and shows it in t
 **Hashtags.** Hashtags are ordinary caption lines everywhere. Paste them at the end of the caption for extensions 1, 3, 4, and 5. Extension 2 has a separate hashtags box because its message and link layout is fixed; both boxes are saved so the next campaign starts with the last used text.
 
 **File picking.**
-- Extension 1 uses a single-file picker (any image, or `mp4`/`webm` video). No file chosen means a text-only post. The chosen media is stored in extension storage immediately and survives popup closes.
+- Extension 1 uses a multi-file picker (any number of images and `mp4`/`webm` videos — Ctrl+click or drag to select several). Every selected group receives ALL chosen files in one post. No file chosen means a text-only post. The chosen media is stored in extension storage immediately and survives popup closes.
 - Extension 2 needs no files at all — Live posts are link + text + hashtags only.
 - Extensions 3, 4, and 5 use folder pickers (`webkitdirectory`): link one campaign folder, or a second one when media is split across two folders. Every file inside is scanned, so `images/` and `videos/` subfolders are welcome but not required — media is matched by day number in the filename.
 
@@ -76,11 +76,11 @@ Lines that start with `![` (image markup), `[image]`/`[video]`/`[reel]`/`[creati
 ### 1. Facebook Group Posting (root)
 
 1. Pin the extension and stay signed into Facebook in Chrome.
-2. Paste the campaign caption (hashtags included) and optionally pick one image or video.
+2. Paste the campaign caption (hashtags included) and optionally pick any number of images/videos (Ctrl+click for multiple).
 3. Click **Import joined groups** — the background opens Facebook **Your groups**, scrolls the complete list, resolves every direct group URL, and fills the checklist. The list and the checked/unchecked ticks are saved in the background, so closing the popup never loses them, and re-importing keeps the operator's selection while adding newly found groups.
 4. Filter with the search box, tick stores individually or with **Select all visible**.
-5. Click **Start auto-post campaign** once. The worker opens each selected group by its direct URL, clears stale drafts, inserts the caption with paragraph breaks, attaches and verifies the media, publishes, waits 30 seconds, and continues. It stops on the first error; **Open Facebook review tab** shows progress and **Stop campaign** halts before the next group.
-6. A media file with no picker selection means text-only posts; the stored-media card shows the saved filename with Replace/Clear buttons.
+5. Click **Start auto-post campaign** once. The worker opens each selected group by its direct URL, clears stale drafts, inserts the caption with paragraph breaks, attaches and verifies the media, publishes, waits 12 seconds, and continues. It stops on the first error; **Open Facebook review tab** shows progress and **Stop campaign** halts before the next group.
+6. No picker selection means text-only posts; the stored-media card lists every saved file with Replace/Clear buttons.
 
 ### 2. Facebook Live Group Poster
 
@@ -133,7 +133,7 @@ Lines that start with `![` (image markup), `[image]`/`[video]`/`[reel]`/`[creati
 
 ## Recent versions
 
-- **FB Group Posting v1.5.0** — background persistence for the joined-groups checklist (popup-close no longer loses the list; ticks survive re-import); manifest-driven footer version.
+- **FB Group Posting v1.6.0** — multi-file media (all selected photos/videos go to every group), 12-second gap between groups (was 30s), background persistence for the joined-groups checklist (popup-close no longer loses the list; ticks survive re-import); manifest-driven footer version.
 - **FB Live Poster v1.3.0** — same background persistence for its saved selection and content.
 - **Meta v1.6.0 / LinkedIn v1.3.0 / YouTube v1.2.0** — campaign folders copied into the IndexedDB asset vault (Downloads deletion safe), automatic queue rebuild from the vault, Clear saved file copies button.
 - **FB Group Posting v1.4.0** — virtualized-list harvest step-scrolls Facebook's group window so very large lists import completely, with partial-import merge.
