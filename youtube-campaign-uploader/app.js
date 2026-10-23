@@ -9,6 +9,8 @@ let displayQueue = [];
 let progress = {};
 let stopped = false;
 let vaultFiles = [];
+let lastRebuildError = "";
+let lastEmptyReason = "";
 
 // ---- extension vault: campaign files saved INSIDE the extension ----
 async function vaultSync(files) {
@@ -68,6 +70,37 @@ async function findMarkdown(files) {
   throw new Error("Campaign Day 1, Day 2… wala Markdown selected folders mein nahi mila.");
 }
 
+// Chrome restart ke baad linked folder ke File objects mar sakte hain (FileList
+// dikhta hai par read NotAllowedError deta hai). Probe: pehla chunk padh ke.
+async function filesReadable(files) {
+  if (!files.length) return true;
+  const probe = files.find(file => file.size > 0) || files[0];
+  try { await probe.slice(0, 8).arrayBuffer(); return true; } catch (_) { return false; }
+}
+
+// Diagnostics: queue empty ho to EXACT wajah batana — generic "No matched
+// daily videos are ready." ko yeh detail replace karti hai.
+function emptyQueueReason(entries, videos, files, startDay) {
+  const dayNums = videos.map(file => YouTubeUploaderLib.dayNumber(file.name));
+  const parsed = [...new Set(dayNums.filter(Boolean))];
+  const mdDays = entries.map(entry => entry.day);
+  const maxMd = mdDays.length ? Math.max(...mdDays) : 0;
+  if (!files.length) return "Koi campaign files linked nahi hain. Campaign folder dobara link karo — ya extension ko ek dafa reopen karo taaki vault se saved copies restore hon.";
+  if (!entries.length) return "Markdown mila par usme '## Day 1' jaisi headings nahi thin — campaign.md check karo.";
+  if (!videos.length) return "Koi video file nahi mili (.mp4/.mov/.webm/.m4v). Videos wale folder ko folder 1/2 mein link karo.";
+  if (!parsed.length) return `Videos mili (${videos.length}) par filenames mein Day/Reel number parse nahi hua. Video ka naam day-7.mp4 / Day 7.mp4 / reel-7.mp4 jaisa hona chahiye. Mile naam: ${videos.slice(0, 5).map(f => f.name).join(", ")}`;
+  if (startDay > maxMd) return `startDay ${startDay} campaign ke max Day ${maxMd} se bada hai. 'Start from campaign day' ko ${maxMd} ya usse chhota karo.`;
+  const upcomingMd = mdDays.filter(day => day >= startDay);
+  const overlap = upcomingMd.filter(day => parsed.includes(day));
+  if (!overlap.length) {
+    const sample = parsed.slice(0, 10).sort((a, b) => a - b).join(", ");
+    return `Markdown days ${mdDays[0]}-${maxMd} hain (startDay ${startDay}) par in mein se kisi ka video match nahi hua. Videos ke day numbers: ${sample || "koi nahi"}. Filenames aur Day headings match karo.`;
+  }
+  const missing = upcomingMd.filter(day => !parsed.includes(day));
+  if (missing.length) return `Day ${missing.slice(0, 10).join(", ")}${missing.length > 10 ? ` … (+${missing.length - 10} more)` : ""} ke videos nahi mile — baaki ${overlap.length} days ready hain. Missing files add karo ya un dinon ko skip karo.`;
+  return "Queue phir se khali ho gayi — extension reopen karke folders dobara link karo.";
+}
+
 function setStatus(message, error = false) {
   $("#status").textContent = message;
   $("#status").style.color = error ? "#ff9a9a" : "#aab3d4";
@@ -96,12 +129,34 @@ function renderQueue() {
 
 async function rebuildQueue() {
   try {
+    lastRebuildError = "";
+    lastEmptyReason = "";
+    // Live folder linked dikhta hai par browser restart ke baad file handles
+    // dead ho sakte hain — probe fail ho to inputs drop karke vault se restore.
+    const liveFiles = [...($("#folder1")?.files || []), ...($("#folder2")?.files || [])];
+    if (liveFiles.length && !(await filesReadable(liveFiles))) {
+      for (const id of ["folder1", "folder2"]) {
+        const input = $("#" + id);
+        if (input.files.length) {
+          input.value = "";
+          $("#" + id + "Summary").textContent = `Folder ${id === "folder1" ? 1 : 2} not selected`;
+        }
+      }
+      await vaultRestoreIfEmpty(false);
+      if (!vaultFiles.length) {
+        queue = []; displayQueue = []; renderQueue();
+        lastEmptyReason = "Linked folder ki files browser restart ke baad unreadable ho gayin aur vault bhi khali hai. Campaign folder fresh link karo.";
+        return;
+      }
+      setStatus(`Linked folder ke file handles expire ho gaye the — ${vaultFiles.length} saved copies vault se wapas laayi gayin.`);
+    }
     const files = selectedFiles();
     if (!files.length) { queue = []; displayQueue = []; renderQueue(); return; }
     const entries = YouTubeUploaderLib.parseCampaign(await findMarkdown(files));
     const videos = files.filter(file => /^video\//.test(file.type) || /\.(mp4|mov|webm|m4v)$/i.test(file.name));
     const startDay = Math.max(1, Number($("#startDay").value) || 1);
     queue = YouTubeUploaderLib.buildQueue(entries, videos, startDay, $("#startDate").value, $("#time").value);
+    if (!queue.length) lastEmptyReason = emptyQueueReason(entries, videos, files, startDay);
     const campaignStartDate = YouTubeUploaderLib.addDays($("#startDate").value, 1 - startDay);
     const previous = YouTubeUploaderLib.buildQueue(entries, videos, 1, campaignStartDate, $("#time").value)
       .filter(item => item.day < startDay)
@@ -116,6 +171,7 @@ async function rebuildQueue() {
     } catch (_) {}
     setStatus(`Matched ${entries.length} captions and ${videos.length} videos. ${queue.length} daily uploads ready.${vaultNote}`);
   } catch (error) {
+    lastRebuildError = error.message;
     queue = [];
     displayQueue = [];
     renderQueue();
@@ -133,7 +189,10 @@ async function filePayload(file) {
 
 async function start() {
   await rebuildQueue();
-  if (!queue.length) throw new Error("No matched daily videos are ready.");
+  // rebuildQueue ka apna error (markdown missing, dead files…) already status
+  // mein hai — generic message usko OVERWRITE na kare.
+  if (lastRebuildError) throw new Error(lastRebuildError);
+  if (!queue.length) throw new Error(lastEmptyReason || "No matched daily videos are ready.");
   const first = new Date(`${queue[0].date}T${queue[0].time}:00`);
   if (!Number.isFinite(first.getTime()) || first.getTime() <= Date.now() + 10 * 60 * 1000) throw new Error("Start date/time at least 10 minutes future mein rakhein.");
   stopped = false;
