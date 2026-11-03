@@ -12,7 +12,7 @@ Five local-first Chrome extensions in one repository that publish the same campa
 | 2 | **Facebook Live Group Poster** v1.3.0 | `facebook-live-group-poster/` | A Facebook Live link + saved message + hashtags | A saved selection of joined groups | Manual paste (no media files) |
 | 3 | **Meta Planner Scheduler** v1.6.0 | `meta-planner-scheduler/` | Day-matched Reels (videos), image posts, and Stories | Facebook Page + Instagram via Meta Business Suite Planner | Campaign folder (Markdown + media) |
 | 4 | **LinkedIn Campaign Uploader** v1.3.0 | `linkedin-campaign-uploader/` | One day-matched image **or** video post per day | 3S Verse LinkedIn company page | Campaign folder (Markdown + media) |
-| 5 | **YouTube Campaign Uploader** v1.2.0 | `youtube-campaign-uploader/` | One day-matched video or Short per day | The verified 3S Verse YouTube channel | Campaign folder (Markdown + videos) |
+| 5 | **YouTube Campaign Uploader** v1.2.3 | `youtube-campaign-uploader/` | One day-matched video or Short per day | The verified 3S Verse YouTube channel | Campaign folder (Markdown + videos) |
 
 Every extension reads its version from its own `manifest.json` and shows it in the footer, so the popup always proves which build is loaded.
 
@@ -133,6 +133,7 @@ Lines that start with `![` (image markup), `[image]`/`[video]`/`[reel]`/`[creati
 
 ## Recent versions
 
+- **YouTube v1.2.3** — tags fix: the tags field is found through multiple selectors (aria-label "Tags"/"Add tags", `#tags-input` variants, generic input fallback), the flow really waits for the field (`tagsReady`) instead of a no-op check, retries the Show more → fill → commit cycle up to 3 attempts with a retention verification, and the final error tells the operator the manual path. Root cause of "Tags were not committed: YouTube control not found: tags".
 - **FB Group Posting v1.6.0** — multi-file media (all selected photos/videos go to every group), 12-second gap between groups (was 30s), background persistence for the joined-groups checklist (popup-close no longer loses the list; ticks survive re-import); manifest-driven footer version.
 - **FB Live Poster v1.3.0** — same background persistence for its saved selection and content.
 - **Meta v1.6.0 / LinkedIn v1.3.0 / YouTube v1.2.0** — campaign folders copied into the IndexedDB asset vault (Downloads deletion safe), automatic queue rebuild from the vault, Clear saved file copies button.
