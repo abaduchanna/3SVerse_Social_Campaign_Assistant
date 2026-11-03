@@ -1,5 +1,11 @@
 # Campaign Folders — what each Social Assistant extension needs
 
+> **One-command option:** `python make_campaign.py` (repo root, or double-click
+> `MAKE_CAMPAIGN.bat` on Windows) generates this entire tree for you — branded
+> images, 9:16 reel/shorts videos, captions, and hashtags, verified against the
+> contract below. See the README section "Generate the whole campaign with one
+> command".
+
 This file is the automation contract between your AI tools and the five extensions.
 Generate content with any AI (ChatGPT, Claude, Gemini, Grok, Midjourney, Veo, Sora…),
 save the outputs under the exact filenames below inside the folder named after the

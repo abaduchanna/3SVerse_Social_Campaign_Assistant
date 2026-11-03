@@ -71,6 +71,35 @@ Lines that start with `![` (image markup), `[image]`/`[video]`/`[reel]`/`[creati
 
 **Dates.** The chosen start date belongs to the first day in the queue — resuming at Day 2 schedules Day 2 on the start date itself, not a day later. Each entry lands on start date + (day − first queued day) at the chosen time (default 09:00; the first day can take a different time in Meta).
 
+## Generate the whole campaign with one command
+
+[make_campaign.py](make_campaign.py) builds a ready-to-link campaign pack **offline** — branded images, 9:16 reel/shorts videos, captions, descriptions and hashtags for all five extensions in a single run:
+
+```
+python make_campaign.py                    # 30-day campaign for the current month
+python make_campaign.py --month 2026-12    # any month
+python make_campaign.py --days 8 --seed 7  # quick sprint, reshuffled copy
+python make_campaign.py --no-videos        # images + text only (no ffmpeg needed)
+```
+
+On Windows, double-click **`MAKE_CAMPAIGN.bat`**. Requires Python 3.8+ and Pillow (`pip install pillow`); videos additionally need `ffmpeg` on PATH — without it everything else is still produced and the mp4s are reported as warnings, not errors.
+
+The output is the exact [CAMPAIGN-FOLDERS.md](CAMPAIGN-FOLDERS.md) tree, ready to link folder-by-folder:
+
+```
+generated/3SVerse-Social-Campaign/
+├── 1-Facebook-Group-Posting/        caption.txt + hashtags.txt + post-media.jpg
+├── 2-Facebook-Live-Group-Poster/    live-link.txt + message.txt + hashtags.txt
+├── 3-Meta-Planner-Scheduler/        campaign.md + images/ (1080x1350) + videos/ (9:16 mp4)
+├── 4-LinkedIn-Campaign-Uploader/    campaign.md + images/ (1200x627 PNG)
+└── 5-YouTube-Campaign-Uploader/     campaign.md + videos/ (9:16 mp4 Shorts)
+```
+
+- **Copy engine** — awareness → pain → proof → offer arc across the month in the 3SVerse voice; product cards carry their own pain/fix/proof/offer lines, so VidaPay pain copy only ever attaches to VidaPay tools; 8–12 hashtags per day, no two identical hashtag lines; 3sverse.com mentioned at least every third day. `--seed` reshuffles the variants deterministically.
+- **Media engine** — 3SVerse dark-brand cards (rings, glow, gradient bar, day badge); reels/shorts are ~16 s silent H.264 1080×1920 with HOOK → PROBLEM → FIX → CTA scenes, crossfades and a progress bar (rendered once, shared by the Meta and YouTube folders).
+- **Verify pass** — the run ends by parsing its own output back with the same rules as the extension code (day headings, hashtag line, duplicate day numbers, per-folder media) and prints each extension's queue: e.g. `plan: 17 feed posts · 9 reels/shorts · 4 stories`, `verify: OK — 30 days`.
+- **Resume** — re-runs skip files that already exist (`--force` re-renders), so interrupted runs continue where they stopped.
+
 ## Workflows
 
 ### 1. Facebook Group Posting (root)
