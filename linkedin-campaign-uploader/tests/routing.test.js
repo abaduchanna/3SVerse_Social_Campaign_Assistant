@@ -8,7 +8,7 @@ const appHtml = fs.readFileSync(path.join(root, "app.html"), "utf8");
 const appJs = fs.readFileSync(path.join(root, "app.js"), "utf8");
 const manifest = JSON.parse(fs.readFileSync(path.join(root, "manifest.json"), "utf8"));
 
-assert.equal(manifest.version, "1.3.1");
+assert.equal(manifest.version, "1.3.2");
 assert.match(background, /Emulation\.setFocusEmulationEnabled/);
 assert.match(appJs, /linkedinScheduleProgressV1/);
 assert.match(fs.readFileSync(path.join(root, "app.js"), "utf8"), /vaultRestoreIfEmpty/);

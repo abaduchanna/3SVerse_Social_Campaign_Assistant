@@ -204,8 +204,19 @@ async function configureSchedule(tabId, item) {
   await trustedClick(tabId, "schedulePost");
   await waitForState(tabId, state => state.scheduleDialogReady, 30000, "LinkedIn's Schedule post dialog did not become ready");
   const wanted = expectedSchedule(item.date, item.time);
-  await trustedReplaceText(tabId, "scheduleDate", wanted.date, "Tab");
-  await waitForState(tabId, state => state.schedule.date === wanted.date, 15000, "LinkedIn did not commit the requested schedule date");
+  // LinkedIn sometimes re-renders the date picker right after the first typed value, so retry the entry a few times.
+  for (let attempt = 1; ; attempt++) {
+    await trustedReplaceText(tabId, "scheduleDate", wanted.date, "Tab");
+    try {
+      await waitForState(tabId, state => state.schedule.date === wanted.date, 6000, "schedule date not yet committed");
+      break;
+    } catch (error) {
+      if (attempt >= 3) {
+        const shown = await readState(tabId).then(state => state.schedule.date).catch(() => "unknown");
+        throw new Error(`LinkedIn did not commit the requested schedule date (wanted ${wanted.date}, field shows "${shown}")`);
+      }
+    }
+  }
   await trustedReplaceText(tabId, "scheduleTime", wanted.time, "Enter");
   await waitForState(tabId, state => state.scheduleDialogReady && state.schedule.date === wanted.date && state.schedule.time.toLowerCase() === wanted.time.toLowerCase(), 15000, "LinkedIn did not commit the requested schedule time or enable Next");
   await trustedClick(tabId, "scheduleNext");
