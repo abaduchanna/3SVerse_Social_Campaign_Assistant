@@ -1,5 +1,5 @@
 const $ = selector => document.querySelector(selector);
-const DASHBOARD_URL = "https://www.linkedin.com/company/144975022/admin/dashboard/";
+const DASHBOARD_URL = "https://www.linkedin.com/company/144975022/admin/page-posts/published/";
 const WINDOWS_SEPARATOR = "\\";
 const sourceForFile = new WeakMap();
 let queue = [];
