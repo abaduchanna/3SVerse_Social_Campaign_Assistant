@@ -53,3 +53,11 @@ const resumed = buildQueue(entries, [file("3SVerse-Reel-01.mp4"), file("3SVerse-
 assert.deepEqual(resumed.map(item => `${item.day}:${item.date}:${item.time}`), ["2:2026-10-10:09:00"]);
 
 process.stdout.write("meta scheduler library test passed\n");
+
+{
+  const md = "## Day 1 — A\n### Meta\nMeta only\n\n### LinkedIn\nLinkedIn only\n---\n## Day 2 — B\nLegacy caption\n";
+  const entries = parseLinkedInCampaign(md);
+  assert.equal(entries[0].caption, "Meta only");
+  assert.equal(entries[1].caption, "Legacy caption");
+  console.log("Meta platform section tests passed.");
+}

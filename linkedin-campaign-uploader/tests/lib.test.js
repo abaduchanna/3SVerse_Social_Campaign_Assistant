@@ -30,3 +30,12 @@ assert.deepEqual(imageQueue.map(item => `${item.day}:${item.type}:${item.date}:$
 const videoQueue = buildQueue(captions, images, videos, { image: true, video: true }, 2, "2026-10-20", "10:30");
 assert.deepEqual(videoQueue.map(item => `${item.day}:${item.type}:${item.date}:${item.time}`), ["2:video:2026-10-20:10:30"]);
 console.log("LinkedIn campaign parser and queue tests passed.");
+
+{
+  const md = "## Day 1 — A\n### Meta\nMeta only\n\n### LinkedIn\nLinkedIn only\n---\n## Day 2 — B\nLegacy caption\n";
+  const entries = parseCampaign(md);
+  assert.equal(entries[0].caption, "LinkedIn only");
+  assert.equal(entries[1].caption, "Legacy caption");
+  assert.equal(parseCampaign("## Day 3 — C\n### Meta\nNo LinkedIn here\n").length, 0);
+  console.log("LinkedIn platform section tests passed.");
+}
