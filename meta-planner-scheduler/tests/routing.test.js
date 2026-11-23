@@ -7,7 +7,7 @@ const background = fs.readFileSync(path.join(root, "background.js"), "utf8");
 const content = fs.readFileSync(path.join(root, "content.js"), "utf8");
 const manifest = JSON.parse(fs.readFileSync(path.join(root, "manifest.json"), "utf8"));
 
-assert.equal(manifest.version, "1.6.0");
+assert.equal(manifest.version, "1.6.1");
 assert.match(background, /Emulation\.setFocusEmulationEnabled/);
 assert.match(fs.readFileSync(path.join(root, "app.js"), "utf8"), /metaScheduleProgressV1/);
 assert.match(fs.readFileSync(path.join(root, "app.js"), "utf8"), /vaultRestoreIfEmpty/);

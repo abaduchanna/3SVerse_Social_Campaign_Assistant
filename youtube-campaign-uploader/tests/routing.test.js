@@ -9,7 +9,7 @@ const html = fs.readFileSync(path.join(root, "app.html"), "utf8");
 const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
 const manifest = JSON.parse(fs.readFileSync(path.join(root, "manifest.json"), "utf8"));
 
-assert.equal(manifest.version, "1.2.3");
+assert.equal(manifest.version, "1.2.4");
 assert.match(bg, /Emulation\.setFocusEmulationEnabled/);
 assert.match(app, /youtubeScheduleProgressV1/);
 assert.match(app, /skipped: true/);
